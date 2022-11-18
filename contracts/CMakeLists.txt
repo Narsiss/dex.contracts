@@ -14,4 +14,4 @@ set(ICON_BASE_URL "http://127.0.0.1/ricardian_assets/amax.contracts/icons")
 
 
 add_subdirectory(orderbookdex)
-add_subdirectory(swapdex)
+# add_subdirectory(swapdex)

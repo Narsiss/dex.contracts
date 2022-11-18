@@ -9,7 +9,7 @@
 using namespace std;
 using namespace eosio;
 
-class DEX_CONTRACT dex_contract : public contract {
+class [[eosio::contract("orderbookdex")]] dex_contract : public contract {
 public:
     using contract::contract;
 
@@ -37,7 +37,7 @@ public:
 
     [[eosio::on_notify("*::transfer")]] void ontransfer(const name& from, const name& to, const asset& quant, const string& memo);
 
-    [[eosio::action]] void withdraw(const name& user, const name& to, const name &token_code, const asset& quant, const string& memo);
+    [[eosio::action]] void withdraw(const name& user, const name &bank, const asset& quant, const string& memo);
 
     /**
      * new order, should deposit by transfer first
@@ -79,13 +79,11 @@ public:
      *  @param max_count the max count of match item
      *  @param sym_pairs the symol pairs to match. is empty, match all
      */
-    [[eosio::action]] void match(const name &matcher, uint32_t max_count, const vector<uint64_t> &sym_pairs, const string &memo);
+    [[eosio::action]] void match(const name &matcher, uint32_t max_count, const string &memo);
 
     [[eosio::action]] void cancel(const uint64_t &order_id);
 
     [[eosio::action]] void cleandata(const uint64_t &max_count);
-
-    [[eosio::action]] void version();
 
     [[eosio::action]] void name2uint(const name& n) { check(false, to_string(n.value)); };
 
@@ -99,7 +97,7 @@ public:
                                         const name order_type,
                                         const bool is_lower_bound);
 
-    using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
+    // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
     using neworder_action   = action_wrapper<"neworder"_n, &dex_contract::neworder>;
     using buymarket_action  = action_wrapper<"buymarket"_n, &dex_contract::buymarket>;
     using sellmarket_action = action_wrapper<"sellmarket"_n, &dex_contract::sellmarket>;
@@ -134,6 +132,9 @@ public:
 private:
     dex::config get_default_config();
     void process_refund(dex::order_t &buy_order);
+
+    void _allot_fee(const name &from_user, const name& bank, const asset& fee, const uint64_t order_id);
+
     void match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair, uint32_t max_count,
                         uint32_t &matched_count, const string &memo);
     void update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price);
@@ -145,12 +146,12 @@ private:
             const uint64_t &external_id,
             const optional<dex::order_config_ex_t> &order_config_ex);
 
-    void add_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer);
+    void add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo);
 
-    inline void sub_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer) {
-        ASSERT(quantity.amount >= 0);
-        add_balance(user, bank, -quantity, ram_payer);
-    }
+    // inline void sub_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer) {
+    //     ASSERT(quantity.amount >= 0);
+    //     add_balance(user, bank, -quantity, ram_payer);
+    // }
 
     bool check_data_outdated(const time_point &data_time, const time_point &now);
 

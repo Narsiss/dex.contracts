@@ -1,7 +1,9 @@
 #include <dex.hpp>
 #include "dex_const.hpp"
 #include "eosio.token.hpp"
-#include "version.hpp"
+// #include "version.hpp"
+#include <eosio/transaction.hpp>
+#include <eosio/permission.hpp>
 
 using namespace eosio;
 using namespace std;
@@ -76,6 +78,32 @@ ACTION dex_contract::init() {
     // }
 
     // update_latest_deal_price(1, asset_from_string("0.001700 USDT"));
+
+    require_auth( get_self() );
+   
+    config conf;
+    conf.dex_enabled = true;
+    conf.dex_admin = "solotestacct"_n;
+    conf.dex_fee_collector = "solotestacct"_n;
+    conf.maker_fee_ratio = 30;
+    conf.taker_fee_ratio = 30;
+    conf.max_match_count = 50;
+    conf.admin_sign_required = false;
+    conf.data_recycle_sec = 5;
+    conf.deferred_matching_secs = 3;
+
+    conf.support_quote_symbols.insert(extended_symbol(SYS_TOKEN, SYS_ACCOUNT));
+    conf.support_quote_symbols.insert(extended_symbol(MIRROR_USDT, MIRROR_BANK));
+    conf.support_quote_symbols.insert(extended_symbol(MIRROR_BNB, MIRROR_BANK));
+    conf.support_quote_symbols.insert(extended_symbol(MIRROR_ETH, MIRROR_BANK));
+    conf.support_quote_symbols.insert(extended_symbol(MIRROR_BTC, MIRROR_BANK));
+
+    conf.parent_reward_ratio = 10;
+    conf.grand_reward_ratio = 5;
+
+    conf.apl_farm_id = 0;
+
+    _conf_tbl.set(conf, get_self());
 }
 
 void dex_contract::setconfig(const dex::config &conf) {
@@ -89,8 +117,10 @@ void dex_contract::setconfig(const dex::config &conf) {
 }
 
 void dex_contract::setsympair(const extended_symbol &asset_symbol,
-                              const extended_symbol &coin_symbol, const asset &min_asset_quant,
-                              const asset &min_coin_quant, bool only_accept_coin_fee,
+                              const extended_symbol &coin_symbol, 
+                              const asset &min_asset_quant,
+                              const asset &min_coin_quant, 
+                              bool only_accept_coin_fee,
                               bool enabled) {
     require_auth( _config.dex_admin );
     const auto &asset_sym = asset_symbol.get_symbol();
@@ -135,7 +165,7 @@ void dex_contract::setsympair(const extended_symbol &asset_symbol,
 
 void dex_contract::onoffsympair(const uint64_t& sympair_id, const bool& on_off) {
     require_auth( _config.dex_admin );
-
+    
     auto sympair_tbl = make_sympair_table(_self);
     auto it = sympair_tbl.find(sympair_id);
     CHECK( it != sympair_tbl.end(), "sympair not found: " + to_string(sympair_id) )
@@ -149,30 +179,44 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     if (from == get_self()) { return; }
     CHECK( to == get_self(), "Must transfer to this contract")
     CHECK( quant.amount > 0, "The quantity must be positive")
-    add_balance(from, get_first_receiver(), quant, get_self());
-}
 
-void dex_contract::withdraw(const name &user, const name &to, const name &token_code, const asset& quant, const string &memo) {
-    CHECK_DEX_ENABLED()
-    require_auth(user);
-    check(quant.amount > 0, "quantity must be positive");
+    auto params = split(memo, ":");
+    if(params.size() == 2 && params[0] == "submit"){
+        uint64_t order_id = to_uint64(params[1], "invalid order_id");
+        auto queue_tbl = make_queue_table(get_self());
+        auto order_itr = queue_tbl.find(order_id);
+        CHECK( order_itr != queue_tbl.end() , "The order not in queue: order_id=" + std::to_string(order_id));
 
-    auto account_tbl = make_account_table(get_self(), user);
-    auto index = account_tbl.get_index<static_cast<name::raw>(account_sym_idx::index_name)>();
-    auto it = index.find( make_uint128(token_code.value, quant.symbol.raw()) );
-    CHECK(it != index.end(),
-          "Trader's exchange balance not found for " + user.to_string() +
-              ", token_code=" + token_code.to_string() +
-              ", sym=" + symbol_to_string(quant.symbol));
+        auto sympair_tbl = make_sympair_table(get_self());
+        auto sympair_id = order_itr->sympair_id;
+        auto sym_pair_it = sympair_tbl.find(sympair_id);
+        CHECK( sym_pair_it != sympair_tbl.end(), "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
+        CHECK( sym_pair_it->enabled, "The symbol pair '" + std::to_string(sympair_id) + " is disabled")
 
-    ASSERT(it->balance.contract == token_code);
+        const auto &asset_symbol = sym_pair_it->asset_symbol.get_symbol();
+        const auto &coin_symbol = sym_pair_it->coin_symbol.get_symbol();
 
-    index.modify(it, same_payer, [&]( auto& a ) {
-        a.balance.quantity -= quant;
-        CHECK(it->balance.quantity.amount >= 0, "insufficient funds");
-    });
+        name frozen_bank = (order_itr->order_side == dex::order_side::BUY) ? sym_pair_it->coin_symbol.get_contract() :
+                sym_pair_it->asset_symbol.get_contract();
+        
+        CHECK( frozen_bank == get_first_receiver(), "order asset must transfer from : " + frozen_bank.to_string() )
+        CHECK( order_itr->frozen_quant == quant, "require quantity is " + order_itr->frozen_quant.to_string() )
 
-    TRANSFER( token_code, user, quant, "withdraw" )
+        auto order_tbl = make_order_table(get_self());
+        order_tbl.emplace(_self, [&](auto &order_info) {
+            order_info = *order_itr;
+            order_info.status = order_status::MATCHABLE;
+        });
+        queue_tbl.erase(order_itr);
+
+        if (_config.max_match_count > 0) {
+            uint32_t matched_count = 0;
+            match_sympair(get_self(), *sym_pair_it, _config.max_match_count, matched_count, "oid:" + std::to_string(order_id));
+        }
+    }
+    else {
+        check(false, "invalid memo params");
+    }
 }
 
 void dex_contract::cancel(const uint64_t &order_id) {
@@ -203,7 +247,7 @@ void dex_contract::cancel(const uint64_t &order_id) {
     }
     CHECK(quantity.amount >= 0, "Can not unfreeze the invalid quantity=" + quantity.to_string());
     if (quantity.amount > 0) {
-        add_balance(order.owner, bank, quantity, order.owner);
+        add_balance(order.owner, bank, quantity, balance_type::ordercancel, "order cancel: " + to_string(order_id));
     }
 
     order_tbl.modify(it, same_payer, [&]( auto& a ) {
@@ -225,11 +269,13 @@ dex::config dex_contract::get_default_config() {
     };
 }
 
-void dex_contract::match(const name &matcher, uint32_t max_count, const vector<uint64_t> &sym_pairs, const string &memo) {
+void dex_contract::match(const name &matcher, uint32_t max_count, const string &memo) {
     CHECK_DEX_ENABLED()
 
     CHECK(is_account(matcher), "The matcher account does not exist");
     CHECK(max_count > 0, "The max_count must > 0")
+
+    auto sym_pairs = _global->matching_sympair;
     std::list<symbol_pair_t> sym_pair_list;
     auto sympair_tbl = dex::make_sympair_table(get_self());
     if (!sym_pairs.empty()) {
@@ -251,7 +297,6 @@ void dex_contract::match(const name &matcher, uint32_t max_count, const vector<u
     uint32_t matched_count = 0;
     for (const auto &sym_pair : sym_pair_list) {
         if (matched_count >= DEX_MATCH_COUNT_MAX) break;
-
         match_sympair(matcher, sym_pair, max_count, matched_count, memo);
     }
 
@@ -260,7 +305,6 @@ void dex_contract::match(const name &matcher, uint32_t max_count, const vector<u
 
 void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
                                   uint32_t max_count, uint32_t &matched_count, const string &memo) {
-
     auto cur_block_time = current_block_time();
     auto order_tbl = make_order_table(get_self());
     auto match_index = order_tbl.get_index<static_cast<name::raw>(order_match_idx::index_name)>();
@@ -297,28 +341,31 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         const auto &asset_bank = sym_pair.asset_symbol.get_contract();
         const auto &coin_bank = sym_pair.coin_symbol.get_contract();
 
-
         asset buy_fee;
         // transfer the buy_fee from buy_order to dex_fee_collector
         if (matched_coins.symbol == buy_order.matched_fee.symbol) {
             buy_fee = calc_match_fee(buy_order, taker_it.order_side(), matched_coins);
-            add_balance(_config.dex_fee_collector, coin_bank, buy_fee, get_self());
+            // add_balance(_config.dex_fee_collector, coin_bank, buy_fee, balance_type::orderfee, "fee: " + to_string(buy_order.order_id));
+            _allot_fee(buy_order.owner, coin_bank, buy_fee, buy_order.order_id);
         } else {
             buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
             buyer_recv_assets -= buy_fee;
-            add_balance(_config.dex_fee_collector, asset_bank, buy_fee, get_self());
+            // add_balance(_config.dex_fee_collector, asset_bank, buy_fee, balance_type::orderfee, "fee: " + to_string(buy_order.order_id));
+            _allot_fee(buy_order.owner, asset_bank, buy_fee, buy_order.order_id);
         }
 
         auto sell_fee = calc_match_fee(sell_order, taker_it.order_side(), seller_recv_coins);
         seller_recv_coins -= sell_fee;
         // transfer the sell_fee from sell_order to dex_fee_collector
-        add_balance(_config.dex_fee_collector, coin_bank, sell_fee, get_self());
+        _allot_fee(sell_order.owner, coin_bank, sell_fee, sell_order.order_id);
 
         // transfer the coins from buy_order to seller
-        add_balance(sell_order.owner, coin_bank, seller_recv_coins, get_self());
+        add_balance(sell_order.owner, coin_bank, seller_recv_coins,  balance_type::ordermatched, 
+                " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
 
         // transfer the assets from sell_order  to buyer
-        add_balance(buy_order.owner, asset_bank, buyer_recv_assets, get_self());
+        add_balance(buy_order.owner, asset_bank, buyer_recv_assets,  balance_type::ordermatched, 
+                " order_id " + to_string(buy_order.order_id) + " deal with " + to_string(sell_order.order_id));
 
         auto deal_id = _global->new_deal_item_id();
 
@@ -333,7 +380,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
             buy_refund_coins = buy_it.get_refund_coins();
             if (buy_refund_coins.amount > 0) {
                 // refund from buy_order to buyer
-                add_balance(buy_order.owner, coin_bank, buy_refund_coins, get_self());
+                add_balance(buy_order.owner, coin_bank, buy_refund_coins, 
+                    balance_type::orderrefund, " order_id: " + to_string(buy_order.order_id));
             }
         }
         auto deal_tbl = dex::make_deal_table(get_self());
@@ -354,7 +402,6 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
             TRACE_L("The matched deal_item=", deal_item);
         });
 
-
         matched_count++;
         matching_pair_it.complete_and_next(order_tbl);
     }
@@ -363,6 +410,65 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
     
     if (latest_deal_price.amount > 0)
         update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
+
+    if (matching_pair_it.can_match()){
+        if(!_global->matching_sympair.count(sym_pair.sympair_id)){
+            _global->matching_sympair.insert(sym_pair.sympair_id);
+        }
+    }
+    else {
+        if(_global->matching_sympair.count(sym_pair.sympair_id)) 
+            _global->matching_sympair.erase(sym_pair.sympair_id);
+    }
+    if (_global->matching_sympair.size() > 0 && !_global->matching_sent){
+        _global->matching_sent = true;
+
+        transaction trx{};
+        trx.actions.emplace_back(
+            permission_level(get_self(), "active"_n),
+            get_self(),
+            "match"_n,
+            std::make_tuple(get_self(), _config.max_match_count, "deferred"));
+        trx.delay_sec = _config.deferred_matching_secs;
+        auto trx_data = pack(trx);
+        send_deferred( (uint64_t(current_time_point().sec_since_epoch()) << 32) | sym_pair.sympair_id, 
+            get_self(), trx_data.data(), trx_data.size());
+    }
+    if (_global->matching_sympair.size() == 0) {
+        _global->matching_sent = false;
+    }
+}
+
+void dex_contract::_allot_fee(const name &from_user, const name& bank, const asset& fee, const uint64_t order_id){
+    if(fee.amount <= 0) return;
+    auto dex_fee = fee;
+
+    if(_config.parent_reward_ratio >0){
+        auto parent = get_account_creator(from_user);
+        if(parent != SYS_ACCOUNT) {
+            auto parent_reward = fee * _config.parent_reward_ratio / RATIO_PRECISION;
+            if(parent_reward.amount > 0){
+                dex_fee -= parent_reward;
+                add_balance(parent, bank, parent_reward, balance_type::parentreward, 
+                    "parent reward from: " + from_user.to_string() + " order: " + to_string(order_id));
+            }
+
+            if(_config.grand_reward_ratio >0){
+                auto grand = get_account_creator(parent);
+                auto grand_reward = fee * _config.grand_reward_ratio / RATIO_PRECISION;
+                if(grand_reward.amount > 0) {
+                    dex_fee -= grand_reward;
+                    add_balance(grand, bank, grand_reward, balance_type::grandreward, 
+                        "grand reward from: " + from_user.to_string() + " order: " + to_string(order_id));
+                }
+            }
+        }
+    }
+
+    if(dex_fee.amount > 0){
+        add_balance(_config.dex_fee_collector, bank, dex_fee, balance_type::ordermatched, "fee: " + to_string(order_id));
+    }
+
 }
 
 void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price) {
@@ -373,10 +479,6 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
     sympair_tbl.modify(*it, same_payer, [&](auto &row) {
         row.latest_deal_price = latest_deal_price;
     });
-}
-
-void dex_contract::version() {
-    CHECK( false, "version: " + dex::version() )
 }
 
 ACTION dex_contract::openorderkey(const uint64_t sympair_id, 
@@ -434,7 +536,7 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const
         validate_fee_ratio(taker_fee_ratio, "ratio");
         validate_fee_ratio(maker_fee_ratio, "ratio");
     }
-
+    
     // check price
     if (price) {
         CHECK(price->symbol == coin_symbol, "The price symbol mismatch with coin_symbol")
@@ -473,16 +575,16 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const
         frozen_quant = limit_quant;
     }
 
-    auto order_tbl = make_order_table(get_self());
+    auto queue_tbl = make_queue_table(get_self());
 
     const auto &fee_symbol = (order_side == dex::order_side::BUY && !sym_pair_it->only_accept_coin_fee) ?
             asset_symbol : coin_symbol;
 
     auto order_id = _global->new_order_id();
-    CHECK( order_tbl.find(order_id) == order_tbl.end(), "The order exists: order_id=" + std::to_string(order_id));
+    CHECK( queue_tbl.find(order_id) == queue_tbl.end(), "The order exists: order_id=" + std::to_string(order_id));
 
     auto cur_block_time = current_block_time();
-    order_tbl.emplace(get_self(), [&](auto &order) {
+    queue_tbl.emplace(get_self(), [&](auto &order) {
         order.order_id = order_id;
         order.external_id = external_id;
         order.owner = user;
@@ -497,52 +599,97 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const
         order.matched_assets = asset(0, asset_symbol);
         order.matched_coins = asset(0, coin_symbol);
         order.matched_fee = asset(0, fee_symbol);
-        order.status = order_status::MATCHABLE;
+        order.status = order_status::QUEUE;
         order.created_at = cur_block_time;
         order.last_updated_at = cur_block_time;
         order.last_deal_id = 0;
     });
+}
 
+void dex_contract::add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo){
+    switch (type.value)
+    {
+    case balance_type::ordermatched.value:
+    case balance_type::ordercancel.value:
+    case balance_type::orderrefund.value:
+        TRANSFER(bank, user, quantity, type.to_string() + " : " + memo);
+        break;
+    case balance_type::orderfee.value:
+    case balance_type::parentreward.value:
+    case balance_type::grandreward.value:
+    {
+        auto rewards = make_reward_table(get_self());
+        auto it = rewards.find( user.value );
 
-    name frozen_bank = (order_side == dex::order_side::BUY) ? sym_pair_it->coin_symbol.get_contract() :
-            sym_pair_it->asset_symbol.get_contract();
-
-    sub_balance(user, frozen_bank, frozen_quant, user);
-
-    if (_config.max_match_count > 0) {
-        uint32_t matched_count = 0;
-        match_sympair(get_self(), *sym_pair_it, _config.max_match_count, matched_count, "oid:" + std::to_string(order_id));
+        extended_asset reward_asset = extended_asset(quantity, bank);
+        extended_symbol reward_symbol = reward_asset.get_extended_symbol();
+        if(it != rewards.end()){
+            rewards.modify(*it, _self, [&](auto &row) {
+                if(row.rewards.count(reward_symbol) == 0){
+                    row.rewards[reward_symbol] = 0;
+                }
+                row.rewards[reward_symbol] += quantity.amount;
+            });
+        }
+        break;
+    }
+    default:
+        break;
     }
 }
 
-void dex_contract::add_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer) {
-    auto account_tbl = make_account_table(get_self(), user);
+// void dex_contract::add_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer) {
+//     auto account_tbl = make_account_table(get_self(), user);
 
-    auto index = account_tbl.get_index<static_cast<name::raw>(account_sym_idx::index_name)>();
-    auto it = index.find( make_uint128(bank.value, quantity.symbol.raw()) );
-    if (it == index.end()) {
-        CHECK(quantity.amount >= 0, "Zero quantity to add for trader: " + user.to_string() +
-              ", bank=" + bank.to_string() +
-              ", sym=" + symbol_to_string(quantity.symbol));
-        // create balance of account
-        auto id = account_tbl.available_primary_key();
-        TRACE_L("create balance. id=", id, ", account=", user.to_string(), ", bank=", bank.to_string(),
-            ", quantity=", quantity);
-        account_tbl.emplace( ram_payer, [&]( auto& a ) {
-            a.id = id; // TODO: add auto-inc account_id in global
-            a.balance.contract = bank;
-            a.balance.quantity = quantity;
-        });
-    } else {
-        TRACE_L("add balance. id=", it->id, ", account=", user.to_string(), ", bank=", bank.to_string(),
-            ", quantity=", quantity);
-        ASSERT(it->balance.contract == bank);
-        index.modify(it, same_payer, [&]( auto& a ) {
-            a.balance.quantity += quantity;
-            CHECK(it->balance.quantity.amount >= 0, "insufficient balance of user=" + user.to_string());
-        });
-    }
-    return;
+//     auto index = account_tbl.get_index<static_cast<name::raw>(account_sym_idx::index_name)>();
+//     auto it = index.find( make_uint128(bank.value, quantity.symbol.raw()) );
+//     if (it == index.end()) {
+//         CHECK(quantity.amount >= 0, "Zero quantity to add for trader: " + user.to_string() +
+//               ", bank=" + bank.to_string() +
+//               ", sym=" + symbol_to_string(quantity.symbol));
+//         // create balance of account
+//         auto id = account_tbl.available_primary_key();
+//         TRACE_L("create balance. id=", id, ", account=", user.to_string(), ", bank=", bank.to_string(),
+//             ", quantity=", quantity);
+//         account_tbl.emplace( ram_payer, [&]( auto& a ) {
+//             a.id = id; // TODO: add auto-inc account_id in global
+//             a.balance.contract = bank;
+//             a.balance.quantity = quantity;
+//         });
+//     } else {
+//         TRACE_L("add balance. id=", it->id, ", account=", user.to_string(), ", bank=", bank.to_string(),
+//             ", quantity=", quantity);
+//         ASSERT(it->balance.contract == bank);
+//         index.modify(it, same_payer, [&]( auto& a ) {
+//             a.balance.quantity += quantity;
+//             CHECK(it->balance.quantity.amount >= 0, "insufficient balance of user=" + user.to_string());
+//         });
+//     }
+//     return;
+// }
+
+void dex_contract::withdraw(const name &user, const name &bank, const asset& quant, const string &memo) {
+    CHECK_DEX_ENABLED()
+    require_auth(user);
+    check(quant.amount > 0, "quantity must be positive");
+
+    auto reward_tbl = make_reward_table(get_self());
+    auto it = reward_tbl.find(user.value);
+
+    CHECK(it != reward_tbl.end(), "The user does not exist or has reward")
+    
+    extended_symbol ext_symbol = extended_symbol(quant.symbol, bank);
+
+    CHECK( it->rewards.count(ext_symbol), "mismatched symbol of reward" )
+    CHECK( it->rewards.at(ext_symbol) >= quant.amount, "overdrawn balance" )
+    reward_tbl.modify(*it, _self, [&](auto &row) {
+        row.rewards[ext_symbol] -= quant.amount;
+        if(row.rewards[ext_symbol] == 0){
+            row.rewards.erase(ext_symbol);
+        }
+    });
+
+    TRANSFER( bank, user, quant, "reward withdraw" )
 }
 
 void dex_contract::buymarket(const name &user, const uint64_t &sympair_id, const asset &coins,
