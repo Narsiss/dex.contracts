@@ -1,4 +1,4 @@
-#pragma once
+    #pragma once
 
 #include "dex_states.hpp"
 #include <utils.hpp>
@@ -49,7 +49,7 @@ namespace dex {
         return asset{fee, quant.symbol};
     }
 
-    inline asset calc_match_fee(const dex::order_t &order, const order_type_t &taker_side, const asset &quant) {
+    inline asset calc_match_fee(const dex::order_t &order, const order_side_t &taker_side, const asset &quant) {
         int64_t ratio = (order.order_side == taker_side) ? order.taker_fee_ratio : order.maker_fee_ratio;
         return calc_match_fee(ratio, quant);
     }
@@ -64,17 +64,16 @@ namespace dex {
             COMPLETED
         };
     public:
-        matching_order_iterator(match_index_t &match_index, uint64_t sympair_id, order_side_t side,
-                                order_type_t type)
+        matching_order_iterator(match_index_t &match_index, uint64_t sympair_id, order_side_t side)
             : _match_index(match_index), _it(match_index.end()), _sym_pair_id(sympair_id),
-              _order_side(side), _order_type(type) {
+              _order_side(side) {
 
-            TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, ", type=", _order_type, "\n");
+            TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
             if (_order_side == order_side::BUY) {
-                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side, _order_type,
+                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side,
                                            std::numeric_limits<uint64_t>::max(), 0);
             } else { // _order_side == order_side::SELL
-                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side, _order_type, 0, 0);
+                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side, 0, 0);
             }
             _it       = _match_index.upper_bound(_key);
             process_data();
@@ -126,18 +125,12 @@ namespace dex {
             _matched_coins += new_matched_coins;
             _matched_fee += new_matched_fee;
             const auto &order = *_it;
-            if (order.order_side == order_side::BUY && order.order_type == order_type::MARKET) {
-                    CHECK(_matched_coins <= order.limit_quant,
-                        "The matched coins=" + _matched_coins.to_string() +
-                        " is overflow with limit_quant=" + order.limit_quant.to_string() + " for market buy order");
-                    completed = _matched_coins == order.limit_quant;
-            } else {
-                CHECK(_matched_assets <= order.limit_quant,
-                    "The matched assets=" + _matched_assets.to_string() +
-                    " is overflow with limit_quant=" + order.limit_quant.to_string());
-                completed = _matched_assets == order.limit_quant;
-            }
 
+            CHECK(_matched_assets <= order.limit_quant,
+                "The matched assets=" + _matched_assets.to_string() +
+                " is overflow with limit_quant=" + order.limit_quant.to_string());
+            completed = _matched_assets == order.limit_quant;
+            
             if (order.order_side == order_side::BUY) {
                 auto total_matched_coins = (_matched_coins.symbol == _matched_fee.symbol) ?
                     _matched_coins + _matched_fee // the buyer pay fee with coins
@@ -147,10 +140,8 @@ namespace dex {
                         " is overflow with frozen_quant=" + order.frozen_quant.to_string() + " for buy order");
                 if (completed) {
                     _status = COMPLETED;
-                    if (order.order_type == order_type::LIMIT) {
-                        if (order.frozen_quant > total_matched_coins) {
-                            _refund_coins = order.frozen_quant - total_matched_coins;
-                        }
+                    if (order.frozen_quant > total_matched_coins) {
+                        _refund_coins = order.frozen_quant - total_matched_coins;
                     }
                 }
             }
@@ -175,11 +166,7 @@ namespace dex {
         inline asset get_free_limit_quant() const {
             ASSERT(is_valid());
             asset ret;
-            if (_it->order_side == order_side::BUY && _it->order_type == order_type::MARKET) {
-                ret = _it->limit_quant - _matched_coins;
-            } else {
-                ret = _it->limit_quant - _matched_assets;
-            }
+            ret = _it->limit_quant - _matched_assets;
             ASSERT(ret.amount >= 0);
             return ret;
         }
@@ -193,15 +180,11 @@ namespace dex {
             return _order_side;
         }
 
-        const order_type_t &order_type() const {
-            return _order_type;
-        }
-
     private:
         void process_data() {
             _status = CLOSED;
             if (_it == _match_index.end()) {
-                TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, ", type=", _order_type, "\n");
+                TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
                 return;
             }
 
@@ -210,7 +193,7 @@ namespace dex {
             // TRACE("start key=", key, ", found key=", stored_order.get_order_match_idx(), "\n");
 
             if (stored_order.sympair_id != _sym_pair_id || stored_order.status != order_status::MATCHABLE ||
-                stored_order.order_side != _order_side || stored_order.order_type != _order_type) {
+                stored_order.order_side != _order_side ) {
                 return;
             }
             TRACE("found order! order=", stored_order, "\n");
@@ -227,7 +210,6 @@ namespace dex {
         order_match_idx_key _key;
         typename match_index_t::const_iterator _it;
         uint64_t _sym_pair_id;
-        order_type_t _order_type;
         order_side_t _order_side;
         status_t _status = CLOSED;
 
@@ -248,10 +230,8 @@ namespace dex {
 
         matching_pair_iterator(match_index_t &match_index, const dex::symbol_pair_t &sym_pair)
             : _match_index(match_index), _sym_pair(sym_pair),
-            limit_buy_it(match_index, sym_pair.sympair_id, order_side::BUY, order_type::LIMIT),
-            limit_sell_it(match_index, sym_pair.sympair_id, order_side::SELL, order_type::LIMIT),
-            market_buy_it(match_index, sym_pair.sympair_id, order_side::BUY, order_type::MARKET),
-            market_sell_it(match_index, sym_pair.sympair_id, order_side::SELL, order_type::MARKET) {
+            limit_buy_it(match_index, sym_pair.sympair_id, order_side::BUY),
+            limit_sell_it(match_index, sym_pair.sympair_id, order_side::SELL){
 
             process_data();
         }
@@ -261,9 +241,6 @@ namespace dex {
             if (_taker_it->is_completed()) {
                 _taker_it->complete_and_next(table);
             }
-            if (_maker_it->is_completed()) {
-                _maker_it->complete_and_next(table);
-            }
             process_data();
         }
 
@@ -271,8 +248,6 @@ namespace dex {
         void save_matching_order(table_t &table) {
             limit_buy_it.save_matching_order(table);
             limit_sell_it.save_matching_order(table);
-            market_buy_it.save_matching_order(table);
-            market_sell_it.save_matching_order(table);
         }
 
         bool can_match() const  {
@@ -291,7 +266,7 @@ namespace dex {
         void calc_matched_amounts(asset &matched_assets, asset &matched_coins) {
             const auto &asset_symbol = _sym_pair.asset_symbol.get_symbol();
             const auto &coin_symbol = _sym_pair.coin_symbol.get_symbol();
-            ASSERT(_maker_it->order_type() == order_type::LIMIT && _maker_it->stored_order().price.amount > 0);
+            ASSERT( _maker_it->stored_order().price.amount > 0);
 
             const auto &matched_price = _maker_it->stored_order().price;
 
@@ -300,23 +275,11 @@ namespace dex {
             CHECK(maker_free_assets.amount > 0, "MUST: maker_free_assets > 0");
 
             asset taker_free_assets;
-            if (_taker_it->order_side() == order_side::BUY && _taker_it->order_type() == order_type::MARKET) {
-                auto taker_free_coins = _taker_it->get_free_limit_quant();
-                ASSERT(taker_free_coins.symbol == coin_symbol);
-                CHECK(taker_free_coins.amount > 0, "MUST: taker_free_coins > 0");
-
-                taker_free_assets = calc_asset_quant(taker_free_coins, matched_price, asset_symbol);
-                if (taker_free_assets <= maker_free_assets) {
-                    matched_assets = taker_free_assets;
-                    matched_coins  = taker_free_coins;
-                    return;
-                }
-            } else {
-                taker_free_assets = _taker_it->get_free_limit_quant();
-                ASSERT(taker_free_assets.symbol == asset_symbol);
-                CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
-            }
-
+    
+            taker_free_assets = _taker_it->get_free_limit_quant();
+            ASSERT(taker_free_assets.symbol == asset_symbol);
+            CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
+        
             matched_assets = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
             matched_coins = calc_coin_quant(matched_assets, matched_price, coin_symbol);
         }
@@ -326,9 +289,6 @@ namespace dex {
         match_index_t &_match_index;
         order_iterator limit_buy_it;
         order_iterator limit_sell_it;
-        order_iterator market_buy_it;
-        order_iterator market_sell_it;
-
         order_iterator *_taker_it = nullptr;
         order_iterator *_maker_it = nullptr;
         bool _can_match = false;
@@ -337,26 +297,14 @@ namespace dex {
             _taker_it = nullptr;
             _maker_it = nullptr;
             _can_match = false;
-            if (market_buy_it.is_valid() && market_sell_it.is_valid()) {
-                _taker_it = (market_buy_it.stored_order().order_id < market_sell_it.stored_order().order_id) ? &market_buy_it : &market_sell_it;
-                _maker_it = (_taker_it->stored_order().order_side == dex::order_side::BUY) ? &limit_sell_it : &limit_buy_it;
-                _can_match = _maker_it->is_valid();
-            }
+    
             if (!_can_match) {
                 _can_match = true;
-                if (market_buy_it.is_valid() && limit_sell_it.is_valid()) {
-                    _taker_it = &market_buy_it;
-                    _maker_it = &limit_sell_it;
-                } else if (market_sell_it.is_valid() && limit_buy_it.is_valid()) {
-                    _taker_it = &market_sell_it;
-                    _maker_it = &limit_buy_it;
-                } else if (limit_buy_it.is_valid() && limit_sell_it.is_valid() && limit_buy_it.stored_order().price >= limit_sell_it.stored_order().price) {
+                if (limit_buy_it.is_valid() && limit_sell_it.is_valid() && limit_buy_it.stored_order().price >= limit_sell_it.stored_order().price) {
                     if (limit_buy_it.stored_order().order_id > limit_sell_it.stored_order().order_id) {
                         _taker_it = &limit_buy_it;
-                        _maker_it = &limit_sell_it;
                     } else {
                         _taker_it = &limit_sell_it;
-                        _maker_it = &limit_buy_it;
                     }
                 } else {
                     _can_match = false;
@@ -365,7 +313,6 @@ namespace dex {
 
             if (!_can_match) {
                 _taker_it = nullptr;
-                _maker_it = nullptr;
             }
         }
     };

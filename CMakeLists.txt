@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(deotc)
+project(src_tools)
+
 
 set(VERSION_MAJOR 0)
 set(VERSION_MINOR 2)
@@ -88,7 +89,7 @@ string(REPLACE ";" "|" TEST_PREFIX_PATH "${CMAKE_PREFIX_PATH}")
 string(REPLACE ";" "|" TEST_FRAMEWORK_PATH "${CMAKE_FRAMEWORK_PATH}")
 string(REPLACE ";" "|" TEST_MODULE_PATH "${CMAKE_MODULE_PATH}")
 
-set(BUILD_TESTS FALSE CACHE BOOL "Build unit tests")
+set(BUILD_TESTS TRUE CACHE BOOL "Build unit tests")
 
 if(BUILD_TESTS)
    message(STATUS "Building unit tests.")

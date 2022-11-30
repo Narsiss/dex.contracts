@@ -1,4 +1,4 @@
-#pragma once
+    #pragma once
 
 #include <map>
 #include <eosio/eosio.hpp>
@@ -14,7 +14,6 @@ namespace dex {
 
     static constexpr eosio::name active_perm{"active"_n};
 
-    typedef name order_type_t;
     typedef name order_side_t;
     typedef name order_status_t;
 
@@ -28,32 +27,12 @@ namespace dex {
         static constexpr name grandreward   = "grandreward"_n;
     }
 
-    namespace order_type {
-        static const order_type_t NONE = order_type_t();
-        static const order_type_t LIMIT = "limit"_n;
-        static const order_type_t MARKET = "market"_n;
-        // order_type_t -> index
-        static const std::map<order_type_t, uint8_t> ENUM_MAP = {
-            {LIMIT, 1},
-            {MARKET, 2}
-        };
-
-        inline bool is_valid(const order_type_t &value) {
-            return ENUM_MAP.count(value);
-        }
-
-        inline uint8_t index(const order_type_t &value) {
-                if (value == NONE) return 0;
-                auto it = ENUM_MAP.find(value);
-                CHECK(it != ENUM_MAP.end(), "Invalid order_type=" + value.to_string());
-                return it->second;
-        }
-    }
 
     namespace order_side {
-        static const order_type_t NONE = order_type_t();
         static const order_side_t BUY = "buy"_n;
         static const order_side_t SELL = "sell"_n;
+        static const order_side_t NONE = order_side_t();
+
         // name -> index
         static const std::map<order_side_t, uint8_t> ENUM_MAP = {
             {BUY, 1},
@@ -63,11 +42,12 @@ namespace dex {
             return ENUM_MAP.count(value);
         }
         inline uint8_t index(const order_side_t &value) {
-                if (value == NONE) return 0;
-                auto it = ENUM_MAP.find(value);
-                CHECK(it != ENUM_MAP.end(), "Invalid order_type=" + value.to_string());
-                return it->second;
+            if (value == NONE) return 0;
+            auto it = ENUM_MAP.find(value);
+            CHECK(it != ENUM_MAP.end(), "Invalid order_side=" + value.to_string());
+            return it->second;
         }
+
     }
 
     namespace order_status {
@@ -97,15 +77,15 @@ namespace dex {
     };
 
     struct DEX_TABLE config {
-        bool dex_enabled;     // if false, disable all operation of common user
-        name dex_admin;   // admin of this contract, permisions: manage sym_pairs, authorize order
-        name dex_fee_collector;   // dex_fee_collector of this contract
-        int64_t maker_fee_ratio;
-        int64_t taker_fee_ratio;
-        uint32_t max_match_count; // the max match count for creating new order,  if 0 will forbid match
-        bool admin_sign_required; // check the order must have the authorization by dex admin
-        int64_t data_recycle_sec; // old data: canceled orders, deal items and related completed orders
-        int8_t deferred_matching_secs; // will auto matching after seconds for hudge order
+        bool        dex_enabled;           // if false, disable all operation of common user
+        name        dex_admin;             // admin of this contract, permisions: manage sym_pairs, authorize order
+        name        dex_fee_collector;     // dex_fee_collector of this contract
+        int64_t     maker_fee_ratio;
+        int64_t     taker_fee_ratio;
+        uint32_t    max_match_count;        // the max match count for creating new order,  if 0 will forbid match
+        bool        admin_sign_required;   // check the order must have the authorization by dex admin
+        int64_t     data_recycle_sec;       // old data: canceled orders, deal items and related completed orders
+        int8_t      deferred_matching_secs; // will auto matching after seconds for hudge order
 
         set<extended_symbol> support_quote_symbols;
         uint64_t parent_reward_ratio;
@@ -223,13 +203,11 @@ namespace dex {
     inline static order_match_idx_key make_order_match_idx(const uint64_t& sympair_id, 
                                                            const order_status_t &status,
                                                            const order_side_t &side,
-                                                           const order_type_t &type, 
                                                            const uint64_t& price,
                                                            const uint64_t& order_id) {
 
         uint64_t option = uint64_t(order_status::index(status)) << 56 
-                        | uint64_t(order_side::index(side))     << 48 
-                        | uint64_t(order_type::index(type))     << 40;
+                        | uint64_t(order_side::index(side))     << 48 ;
 
         uint64_t price_factor = (side == order_side::BUY) ? std::numeric_limits<uint64_t>::max() - price : price;
         auto ret = order_match_idx_key::make_from_word_sequence<uint64_t>(sympair_id, option, price_factor, order_id);
@@ -246,7 +224,6 @@ namespace dex {
         uint64_t external_id; // external id
         name owner;
         uint64_t sympair_id; // id of symbol_pair_table
-        order_type_t order_type;
         order_side_t order_side;
         asset price;
         asset limit_quant;
@@ -269,7 +246,7 @@ namespace dex {
         }
 
         order_match_idx_key get_order_match_idx()const { 
-            return make_order_match_idx(sympair_id, status, order_side, order_type, price.amount, order_id); 
+            return make_order_match_idx(sympair_id, status, order_side, price.amount, order_id); 
         }
 
         uint256_t get_order_sym_idx()const { 
@@ -284,7 +261,6 @@ namespace dex {
                 PP(external_id),
                 PP(owner),
                 PP0(sympair_id),
-                PP(order_type),
                 PP(order_side),
                 PP(price),
                 PP(limit_quant),

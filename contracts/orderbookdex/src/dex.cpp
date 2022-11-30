@@ -483,7 +483,6 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
 
 ACTION dex_contract::openorderkey(const uint64_t sympair_id, 
                                  const name order_side,
-                                 const name order_type, 
                                  const bool is_lower_bound) {
 
     auto price = (order_side == "buy"_n) ? (is_lower_bound ? std::numeric_limits<uint64_t>::max() : 0) :
@@ -493,7 +492,6 @@ ACTION dex_contract::openorderkey(const uint64_t sympair_id,
         sympair_id, 
         order_status_t("matchable"_n), 
         order_side_t(order_side), 
-        order_type_t(order_type), 
         price, 0);
 
     array<uint8_t, 32> idx_buffer = idx_fixed.extract_as_byte_array();
@@ -501,16 +499,16 @@ ACTION dex_contract::openorderkey(const uint64_t sympair_id,
     check( false, to_hex(idx_buffer) );
 }
 
-void dex_contract::neworder(const name &user, const uint64_t &sympair_id, const name &order_type,
+void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
                             const name &order_side, const asset &limit_quant,
                             const asset &frozen_quant, const asset &price,
                             const uint64_t &external_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
     // frozen_quant not in use
-    new_order(user, sympair_id, order_type, order_side, limit_quant, price, external_id, order_config_ex);
+    new_order(user, sympair_id, order_side, limit_quant, price, external_id, order_config_ex);
 }
 
-void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const name &order_type,
+void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
                              const name &order_side, const asset &limit_quant,
                              const optional<asset> &price,
                              const uint64_t &external_id,
@@ -540,29 +538,17 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const
     // check price
     if (price) {
         CHECK(price->symbol == coin_symbol, "The price symbol mismatch with coin_symbol")
-        if (order_type == dex::order_type::LIMIT) {
-            CHECK( price->amount > 0, "The price must > 0 for limit order")
-        } else { // order.order_type == dex::order_type::LIMIT
-            CHECK( price->amount == 0, "The price must == 0 for market order")
-        }
+        CHECK( price->amount > 0, "The price must > 0 for limit order")
     }
 
     asset frozen_quant;
     if (order_side == dex::order_side::BUY) {
-        if (order_type == dex::order_type::LIMIT) {
-            CHECK( limit_quant.symbol == asset_symbol,
-                    "The limit_symbol=" + symbol_to_string(limit_quant.symbol) +
-                        " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
-                        " for limit buy order");
-            ASSERT(price.has_value());
-            frozen_quant = dex::calc_coin_quant(limit_quant, *price, coin_symbol);
-        } else {// order_type == order_type::MARKET
-            CHECK(limit_quant.symbol == coin_symbol,
-                    "The limit_symbol=" + symbol_to_string(limit_quant.symbol) +
-                        " mismatch with coin_symbol=" + symbol_to_string(coin_symbol) +
-                        " for market buy order");
-            frozen_quant = limit_quant;
-        }
+        CHECK( limit_quant.symbol == asset_symbol,
+            "The limit_symbol=" + symbol_to_string(limit_quant.symbol) +
+            " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
+            " for limit buy order");
+        ASSERT(price.has_value());
+        frozen_quant = dex::calc_coin_quant(limit_quant, *price, coin_symbol);
         if (sym_pair_it->only_accept_coin_fee) {
             frozen_quant += dex::calc_match_fee(taker_fee_ratio, frozen_quant);
         }
@@ -589,7 +575,6 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id, const
         order.external_id = external_id;
         order.owner = user;
         order.sympair_id = sympair_id;
-        order.order_type = order_type;
         order.order_side = order_side;
         order.price = price ? *price : asset(0, coin_symbol);
         order.limit_quant = limit_quant;
@@ -692,31 +677,17 @@ void dex_contract::withdraw(const name &user, const name &bank, const asset& qua
     TRANSFER( bank, user, quant, "reward withdraw" )
 }
 
-void dex_contract::buymarket(const name &user, const uint64_t &sympair_id, const asset &coins,
-                             const uint64_t &external_id,
-                             const optional<dex::order_config_ex_t> &order_config_ex) {
-    new_order(user, sympair_id, order_type::MARKET, order_side::BUY, coins, nullopt,
-              external_id, order_config_ex);
-}
-
-void dex_contract::sellmarket(const name &user, const uint64_t &sympair_id, const asset &quantity,
-                              const uint64_t &external_id,
-                              const optional<dex::order_config_ex_t> &order_config_ex) {
-    new_order(user, sympair_id, order_type::MARKET, order_side::SELL, quantity, nullopt,
-              external_id, order_config_ex);
-}
-
-void dex_contract::buylimit(const name &user, const uint64_t &sympair_id, const asset &quantity,
+void dex_contract::buy(const name &user, const uint64_t &sympair_id, const asset &quantity,
                             const asset &price, const uint64_t &external_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
-    new_order(user, sympair_id, order_type::LIMIT, order_side::BUY, quantity, price,
+    new_order(user, sympair_id, order_side::BUY, quantity, price,
               external_id, order_config_ex);
 }
 
-void dex_contract::selllimit(const name &user, const uint64_t &sympair_id, const asset &quantity,
+void dex_contract::sell(const name &user, const uint64_t &sympair_id, const asset &quantity,
                              const asset &price, const uint64_t &external_id,
                              const optional<dex::order_config_ex_t> &order_config_ex) {
-    new_order(user, sympair_id, order_type::LIMIT, order_side::SELL, quantity, price,
+    new_order(user, sympair_id, order_side::SELL, quantity, price,
               external_id, order_config_ex);
 }
 

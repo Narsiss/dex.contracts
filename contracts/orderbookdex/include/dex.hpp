@@ -43,34 +43,25 @@ public:
      * new order, should deposit by transfer first
      * @param user - user, owner of order
      * @param sympair_id - symbol pair id
-     * @param order_type - order type, LIMIT | MARKET
      * @param order_side - order side, BUY | SELL
      * @param limit_quant - the limit quantity
      * @param frozen_quant - the frozen quantity, unused
-     * @param price - the price, should be 0 for MARKET order
+     * @param price - the price
      * @param external_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
      */
     [[eosio::action]] void
     neworder(const name &user, const uint64_t &sympair_id,
-             const name &order_type, const name &order_side,
+            const name &order_side,
              const asset &limit_quant, const asset &frozen_quant,
              const asset &price, const uint64_t &external_id,
              const optional<dex::order_config_ex_t> &order_config_ex);
 
-    [[eosio::action]] void buymarket(const name &user, const uint64_t &sympair_id,
-                                     const asset &coins, const uint64_t &external_id,
-                                     const optional<dex::order_config_ex_t> &order_config_ex);
-
-    [[eosio::action]] void sellmarket(const name &user, const uint64_t &sympair_id,
-                                      const asset &quantity, const uint64_t &external_id,
-                                      const optional<dex::order_config_ex_t> &order_config_ex);
-
-    [[eosio::action]] void buylimit(const name &user, const uint64_t &sympair_id,
+    [[eosio::action]] void buy(const name &user, const uint64_t &sympair_id,
                                     const asset &quantity, const asset &price, const uint64_t &external_id,
                                     const optional<dex::order_config_ex_t> &order_config_ex);
 
-    [[eosio::action]] void selllimit(const name &user, const uint64_t &sympair_id,
+    [[eosio::action]] void sell(const name &user, const uint64_t &sympair_id,
                                      const asset &quantity, const asset &price,
                                      const uint64_t &external_id,
                                      const optional<dex::order_config_ex_t> &order_config_ex);
@@ -87,22 +78,14 @@ public:
 
     [[eosio::action]] void name2uint(const name& n) { check(false, to_string(n.value)); };
 
-    // [[eosio::action]] void ordermatchin(const uint64_t sympair_id, 
-    //                                     const name order_status,
-    //                                     const name order_side,
-    //                                     const name order_type);
-
     [[eosio::action]] void openorderkey(const uint64_t sympair_id,
                                         const name order_side,
-                                        const name order_type,
                                         const bool is_lower_bound);
 
     // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
     using neworder_action   = action_wrapper<"neworder"_n, &dex_contract::neworder>;
-    using buymarket_action  = action_wrapper<"buymarket"_n, &dex_contract::buymarket>;
-    using sellmarket_action = action_wrapper<"sellmarket"_n, &dex_contract::sellmarket>;
-    using buylimit_action   = action_wrapper<"buylimit"_n, &dex_contract::buylimit>;
-    using selllimit_action  = action_wrapper<"selllimit"_n, &dex_contract::selllimit>;
+    using buy_action   = action_wrapper<"buy"_n, &dex_contract::buy>;
+    using sell_action  = action_wrapper<"sell"_n, &dex_contract::sell>;
     using match_action      = action_wrapper<"match"_n, &dex_contract::match>;
     using cancel_action     = action_wrapper<"cancel"_n, &dex_contract::cancel>;
 
@@ -140,7 +123,7 @@ private:
     void update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price);
 
     void new_order(const name &user, const uint64_t &sympair_id,
-            const name &order_type, const name &order_side,
+            const name &order_side,
             const asset &limit_quant,
             const optional<asset> &price,
             const uint64_t &external_id,

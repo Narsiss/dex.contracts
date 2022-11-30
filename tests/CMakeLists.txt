@@ -1,29 +1,36 @@
 cmake_minimum_required( VERSION 3.5 )
 
-set(EOSIO_VERSION_MIN "1.7")
-set(EOSIO_VERSION_SOFT_MAX "2.0")
-#set(EOSIO_VERSION_HARD_MAX "")
+set(AMAX_VERSION_MIN "0.1")
+set(AMAX_VERSION_SOFT_MAX "0.5")
+#set(AMAX_VERSION_HARD_MAX "")
 
-find_package(eosio)
+find_package(amax)
 
-### Check the version of eosio
+### Check the version of amax
 set(VERSION_MATCH_ERROR_MSG "")
-AMAX_CHECK_VERSION(VERSION_OUTPUT "${EOSIO_VERSION}"
-                                   "${EOSIO_VERSION_MIN}"
-                                   "${EOSIO_VERSION_SOFT_MAX}"
-                                   "${EOSIO_VERSION_HARD_MAX}"
+AMAX_CHECK_VERSION(VERSION_OUTPUT "${AMAX_VERSION}"
+                                   "${AMAX_VERSION_MIN}"
+                                   "${AMAX_VERSION_SOFT_MAX}"
+                                   "${AMAX_VERSION_HARD_MAX}"
                                    VERSION_MATCH_ERROR_MSG)
 if(VERSION_OUTPUT STREQUAL "MATCH")
-   message(STATUS "Using eosio version ${EOSIO_VERSION}")
+   message(STATUS "Using amax version ${AMAX_VERSION}")
 elseif(VERSION_OUTPUT STREQUAL "WARN")
-   message(WARNING "Using eosio version ${EOSIO_VERSION} even though it exceeds the maximum supported version of ${EOSIO_VERSION_SOFT_MAX}; continuing with configuration, however build may fail.\nIt is recommended to use eosio version ${EOSIO_VERSION_SOFT_MAX}.x")
+   message(WARNING "Using amax version ${AMAX_VERSION} even though it exceeds the maximum supported version of ${AMAX_VERSION_SOFT_MAX}; continuing with configuration, however build may fail.\nIt is recommended to use amax version ${AMAX_VERSION_SOFT_MAX}.x")
 else() # INVALID OR MISMATCH
-   message(FATAL_ERROR "Found eosio version ${EOSIO_VERSION} but it does not satisfy version requirements: ${VERSION_MATCH_ERROR_MSG}\nPlease use eosio version ${EOSIO_VERSION_SOFT_MAX}.x")
+   message(FATAL_ERROR "Found amax version ${AMAX_VERSION} but it does not satisfy version requirements: ${VERSION_MATCH_ERROR_MSG}\nPlease use amax version ${AMAX_VERSION_SOFT_MAX}.x")
 endif(VERSION_OUTPUT STREQUAL "MATCH")
 
 configure_file(${CMAKE_SOURCE_DIR}/contracts.hpp.in ${CMAKE_BINARY_DIR}/contracts.hpp)
 
 include_directories(${CMAKE_BINARY_DIR})
+
+include(ExternalProject)
+
+set(AMAX_WASM_OLD_BEHAVIOR "Off")
+find_package(amax.cdt REQUIRED)
+
+
 ### UNIT TESTING ###
 include(CTest) # eliminates DartConfiguration.tcl errors at test runtime
 enable_testing()
