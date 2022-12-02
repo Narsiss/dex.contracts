@@ -9,25 +9,6 @@ using namespace eosio;
 using namespace std;
 using namespace dex;
 
-#define CHECK_DEX_ENABLED() { \
-    CHECKC(_config.dex_enabled, err::STATUS_ERROR, string("DEX is disabled! function=") + __func__) \
-}
-
-
-
-inline std::string str_to_upper(string_view str) {
-    std::string ret(str.size(), 0);
-    for (size_t i = 0; i < str.size(); i++) {
-        ret[i] = std::toupper(str[i]);
-    }
-    return ret;
-}
-
-inline static uint64_t parse_uint64(string_view str) {
-   safe<uint64_t> ret;
-   to_int(str, ret);
-   return ret.value;
-}
 
 void validate_fee_ratio(int64_t ratio, const string &title) {
     CHECKC(ratio >= 0 && ratio <= FEE_RATIO_MAX, err::PARAM_ERROR,

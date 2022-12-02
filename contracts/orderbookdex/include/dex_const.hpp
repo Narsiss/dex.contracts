@@ -41,3 +41,8 @@ static constexpr symbol APL_SYMBOL      = SYMBOL("APL",4);
 
 #define CHECKC(exp, code, msg) \
    { if (!(exp)) eosio::check(false, std::string("$$$") + std::to_string((int)code) + std::string("$$$ ") + msg); }
+
+
+#define CHECK_DEX_ENABLED() { \
+    CHECKC(_config.dex_enabled, err::STATUS_ERROR, string("DEX is disabled! function=") + __func__) \
+}

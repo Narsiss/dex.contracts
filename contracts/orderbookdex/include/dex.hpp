@@ -112,10 +112,23 @@ public:
         return to_hex(chars);
     } 
 
+    inline std::string str_to_upper(string_view str) {
+        std::string ret(str.size(), 0);
+        for (size_t i = 0; i < str.size(); i++) {
+            ret[i] = std::toupper(str[i]);
+        }
+        return ret;
+    }
+
+    inline uint64_t parse_uint64(string_view str) {
+        safe<uint64_t> ret;
+        to_int(str, ret);
+        return ret.value;
+    }
+
 private:
     dex::config get_default_config();
-    void process_refund(dex::order_t &buy_order);
-
+    
     void _allot_fee(const name &from_user, const name& bank, const asset& fee, const uint64_t order_id);
 
     void match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair, uint32_t max_count,
@@ -130,11 +143,6 @@ private:
             const optional<dex::order_config_ex_t> &order_config_ex);
 
     void add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo);
-
-    // inline void sub_balance(const name &user, const name &bank, const asset &quantity, const name &ram_payer) {
-    //     ASSERT(quantity.amount >= 0);
-    //     add_balance(user, bank, -quantity, ram_payer);
-    // }
 
     bool check_data_outdated(const time_point &data_time, const time_point &now);
 
