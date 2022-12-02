@@ -432,24 +432,6 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
     });
 }
 
-ACTION dex_contract::openorderkey(const uint64_t sympair_id, 
-                                 const name order_side,
-                                 const bool is_lower_bound) {
-
-    auto price = (order_side == "buy"_n) ? (is_lower_bound ? std::numeric_limits<uint64_t>::max() : 0) :
-                                           (is_lower_bound ? 0 : std::numeric_limits<uint64_t>::max());
-
-    auto idx_fixed = make_order_match_idx(
-        sympair_id, 
-        order_status_t("matchable"_n), 
-        order_side_t(order_side), 
-        price, 0);
-
-    array<uint8_t, 32> idx_buffer = idx_fixed.extract_as_byte_array();
-
-    check( false, to_hex(idx_buffer) );
-}
-
 void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
                             const name &order_side, const asset &limit_quant,
                             const asset &frozen_quant, const asset &price,

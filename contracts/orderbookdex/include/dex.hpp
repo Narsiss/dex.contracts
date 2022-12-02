@@ -76,18 +76,12 @@ public:
 
     ACTION cleandata(const uint64_t &max_count);
 
-    ACTION name2uint(const name& n) { check(false, to_string(n.value)); };
-
-    ACTION openorderkey(const uint64_t sympair_id,
-                        const name order_side,
-                        const bool is_lower_bound);
-
     // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
-    using neworder_action   = action_wrapper<"neworder"_n, &dex_contract::neworder>;
-    using buy_action        = action_wrapper<"buy"_n, &dex_contract::buy>;
-    using sell_action       = action_wrapper<"sell"_n, &dex_contract::sell>;
-    using match_action      = action_wrapper<"match"_n, &dex_contract::match>;
-    using cancel_action     = action_wrapper<"cancel"_n, &dex_contract::cancel>;
+    using neworder_action   = action_wrapper<"neworder"_n,  &dex_contract::neworder>;
+    using buy_action        = action_wrapper<"buy"_n,       &dex_contract::buy>;
+    using sell_action       = action_wrapper<"sell"_n,      &dex_contract::sell>;
+    using match_action      = action_wrapper<"match"_n,     &dex_contract::match>;
+    using cancel_action     = action_wrapper<"cancel"_n,    &dex_contract::cancel>;
 
 public:
     std::string to_hex(const char* d, uint32_t s){

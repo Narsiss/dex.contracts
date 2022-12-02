@@ -70,13 +70,13 @@ namespace dex {
 
             TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
             if (_order_side == order_side::BUY) {
-                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side,
-                                           std::numeric_limits<uint64_t>::max(), 0);
+                _key = make_order_match_idx( _order_side, std::numeric_limits<uint64_t>::max());
             } else { // _order_side == order_side::SELL
-                _key = make_order_match_idx(_sym_pair_id, order_status::MATCHABLE, _order_side, 0, 0);
+                _key = make_order_match_idx( _order_side, 0);
             }
-            _it       = _match_index.upper_bound(_key);
+            _it = _match_index.upper_bound(_key);
             process_data();
+            
         };
 
         template<typename table_t>
@@ -177,7 +177,7 @@ namespace dex {
         }
 
         const order_side_t &order_side() const {
-            return _order_side;
+            return _order_side; 
         }
 
     private:

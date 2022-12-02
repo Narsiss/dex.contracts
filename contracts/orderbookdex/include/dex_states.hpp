@@ -222,25 +222,17 @@ namespace dex {
         return symbol_pair_table(self, self.value/*scope*/);
     }
 
-    using order_match_idx_key = uint256_t;
-    inline static order_match_idx_key make_order_match_idx(const uint64_t&       sympair_id, 
-                                                           const order_status_t& status,
-                                                           const order_side_t&   side,
-                                                           const uint64_t&       price,
-                                                           const uint64_t&       order_id) {
-
-        uint64_t option = uint64_t(order_status::index(status)) << 56 
-                        | uint64_t(order_side::index(side))     << 48 ;
-
+    using order_match_idx_key = uint64_t;
+    inline static order_match_idx_key make_order_match_idx( const order_side_t& side, const uint64_t& price ) {
         uint64_t price_factor = (side == order_side::BUY) ? std::numeric_limits<uint64_t>::max() - price : price;
-        auto ret = order_match_idx_key::make_from_word_sequence<uint64_t>(sympair_id, option, price_factor, order_id);
-        // print("make order match idx=", ret, "\n");
-        return ret;
+        return price_factor;
     }
 
     uint128_t make_uint128(uint64_t high_val, uint64_t low_val) {
         return uint128_t(high_val) << 64 | uint128_t(low_val);
     }
+
+
 
     struct DEX_TABLE order_t {
         uint64_t        order_id;           // auto-increment
@@ -260,20 +252,15 @@ namespace dex {
         time_point      created_at;
         time_point      last_updated_at;
         uint64_t        last_deal_id;
-        uint64_t primary_key() const { return order_id; }
 
+        uint64_t primary_key() const { return order_id; }
         uint64_t by_owner()const { return owner.value; }
         uint64_t by_external_id()const { return external_id; }
-        uint128_t by_updated_at() const {
-            return make_uint128(status.value, last_updated_at.elapsed.count());
-        }
+        uint64_t get_price()const { return  price.amount; }
+
 
         order_match_idx_key get_order_match_idx()const { 
-            return make_order_match_idx(sympair_id, status, order_side, price.amount, order_id); 
-        }
-
-        uint256_t get_order_sym_idx()const { 
-            return uint256_t::make_from_word_sequence<uint64_t>(owner.value, sympair_id, status.value, 0ULL); 
+            return make_order_match_idx( order_side, price.amount); 
         }
 
         void print() const {
@@ -301,16 +288,18 @@ namespace dex {
         }
     };
 
-    using order_match_idx = indexed_by<"ordermatch"_n, const_mem_fun<order_t, order_match_idx_key, &order_t::get_order_match_idx> >;
-    using order_updated_at_idx = indexed_by<"orderupdated"_n, const_mem_fun<order_t, uint128_t, &order_t::by_updated_at> >;
+    using order_match_idx = indexed_by<"ordermatch"_n, const_mem_fun<order_t, uint64_t, &order_t::get_price> >;
+    using order_owner_idx = indexed_by<"orderowner"_n, const_mem_fun<order_t, uint64_t, &order_t::by_owner> >;
 
-    typedef eosio::multi_index<"order"_n, order_t, order_match_idx, order_updated_at_idx> order_tbl;
-    typedef eosio::multi_index<"queue"_n, order_t, order_match_idx, order_updated_at_idx> queue_tbl;
+    typedef eosio::multi_index<"order"_n, order_t, order_match_idx> order_tbl;
+    typedef eosio::multi_index<"queue"_n, order_t, order_owner_idx> queue_tbl;
 
     inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id, const order_side_t& side ) { \
                         return order_tbl(self, pair_id << 8 | uint64_t(order_side::index(side))); \
                     }
+    
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
+ 
 
     struct deal_item_t {
         uint64_t    id;
