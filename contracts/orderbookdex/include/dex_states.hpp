@@ -1,12 +1,15 @@
-    #pragma once
+#pragma once
 
 #include <map>
+#include <set>
 #include <eosio/eosio.hpp>
 #include <eosio/name.hpp>
 #include <eosio/asset.hpp>
 #include <eosio/singleton.hpp>
 #include "dex_const.hpp"
+#include "dex_states.hpp"
 #include "utils.hpp"
+
 
 namespace dex {
 
@@ -17,6 +20,28 @@ namespace dex {
     typedef name order_side_t;
     typedef name order_status_t;
 
+    enum class err: uint8_t {
+        NONE                 = 0,
+        RECORD_NOT_FOUND     = 1,
+        RECORD_EXISTING      = 2,
+        SYMBOL_MISMATCH      = 4,
+        PARAM_ERROR          = 5,
+        MEMO_FORMAT_ERROR    = 6,
+        PAUSED               = 7,
+        NO_AUTH              = 8,
+        NOT_POSITIVE         = 9,
+        NOT_STARTED          = 10,
+        OVERSIZED            = 11,
+        TIME_EXPIRED         = 12,
+        NOTIFY_UNRELATED     = 13,
+        ACTION_REDUNDANT     = 14,
+        ACCOUNT_INVALID      = 15,
+        FEE_INSUFFICIENT     = 16,
+        FIRST_CREATOR        = 17,
+        STATUS_ERROR         = 18,
+        SCORE_NOT_ENOUGH     = 19,
+        NEED_REQUIRED_CHECK  = 20
+    };
 
     namespace balance_type {
         static constexpr name ordercancel   = "ordercancel"_n;
@@ -27,16 +52,15 @@ namespace dex {
         static constexpr name grandreward   = "grandreward"_n;
     }
 
-
     namespace order_side {
-        static const order_side_t BUY = "buy"_n;
-        static const order_side_t SELL = "sell"_n;
-        static const order_side_t NONE = order_side_t();
+        static const order_side_t BUY   = "buy"_n;
+        static const order_side_t SELL  = "sell"_n;
+        static const order_side_t NONE  = order_side_t();
 
         // name -> index
         static const std::map<order_side_t, uint8_t> ENUM_MAP = {
-            {BUY, 1},
-            {SELL, 2}
+            {BUY,   1},
+            {SELL,  2}
         };
         inline bool is_valid(const order_side_t &value) {
             return ENUM_MAP.count(value);
@@ -44,18 +68,17 @@ namespace dex {
         inline uint8_t index(const order_side_t &value) {
             if (value == NONE) return 0;
             auto it = ENUM_MAP.find(value);
-            CHECK(it != ENUM_MAP.end(), "Invalid order_side=" + value.to_string());
+            CHECKC(it != ENUM_MAP.end(), err::PARAM_ERROR, "Invalid order_side=" + value.to_string());
             return it->second;
         }
-
     }
 
     namespace order_status {
-        static const order_status_t NONE = order_status_t();
-        static const order_status_t QUEUE = "queue"_n;
-        static const order_status_t MATCHABLE = "matchable"_n;
-        static const order_status_t COMPLETED = "completed"_n;
-        static const order_status_t CANCELED = "canceled"_n;
+        static const order_status_t NONE        = order_status_t();
+        static const order_status_t QUEUE       = "queue"_n;
+        static const order_status_t MATCHABLE   = "matchable"_n;
+        static const order_status_t COMPLETED   = "completed"_n;
+        static const order_status_t CANCELED    = "canceled"_n;
         // name -> index
         static const std::map<order_status_t, uint8_t> ENUM_MAP = {
             {MATCHABLE, 1},
@@ -66,7 +89,7 @@ namespace dex {
         inline uint8_t index(const order_status_t &value) {
             if (value == NONE) return 0;
             auto it = ENUM_MAP.find(value);
-            CHECK(it != ENUM_MAP.end(), "Invalid order_status=" + value.to_string());
+            CHECKC(it != ENUM_MAP.end(), err::STATUS_ERROR, "Invalid order_status=" + value.to_string());
             return it->second;
         }
     }
@@ -88,21 +111,21 @@ namespace dex {
         int8_t      deferred_matching_secs; // will auto matching after seconds for hudge order
 
         set<extended_symbol> support_quote_symbols;
-        uint64_t parent_reward_ratio;
-        uint64_t grand_reward_ratio;
+        uint64_t    parent_reward_ratio;
+        uint64_t    grand_reward_ratio;
 
-        uint64_t apl_farm_id;
-        map <symbol_code, uint32_t> farm_scales;
+        uint64_t    apl_farm_id;
+        map<symbol_code, uint32_t> farm_scales;
     };
 
     typedef eosio::singleton< "config"_n, config > config_table;
 
     struct DEX_TABLE global {
-        uint64_t order_id    = 0; // the auto-increament id of order
-        uint64_t sympair_id = 0; // the auto-increament id of symbol pair
-        uint64_t deal_item_id = 0; // the auto-increament id of deal item
-        set<uint64_t> matching_sympair; // deferred send action to match
-        bool matching_sent = false; // deferred send action to match
+        uint64_t        order_id    = 0;        // the auto-increament id of order
+        uint64_t        sympair_id = 0;         // the auto-increament id of symbol pair
+        uint64_t        deal_item_id = 0;       // the auto-increament id of deal item
+        set<uint64_t>   matching_sympair;       // deferred send action to match
+        bool            matching_sent = false;  // deferred send action to match
     };
 
     typedef eosio::singleton< "global"_n, global > global_table;
@@ -172,20 +195,20 @@ namespace dex {
     }
 
     struct DEX_TABLE symbol_pair_t {
-        uint64_t sympair_id; // PK: auto-increment
+        uint64_t        sympair_id; // PK: auto-increment
         extended_symbol asset_symbol;
         extended_symbol coin_symbol;
-        asset min_asset_quant;
-        asset min_coin_quant;
-        asset latest_deal_price;
-        int64_t taker_fee_ratio;
-        int64_t maker_fee_ratio;
-        bool only_accept_coin_fee;
-        bool enabled;
-        uint64_t farm_lease_id;
-        int64_t farm_ratio;
-        int64_t parent_fee_ratio;
-        int64_t grand_fee_ratio;
+        asset           min_asset_quant;
+        asset           min_coin_quant;
+        asset           latest_deal_price;
+        int64_t         taker_fee_ratio;
+        int64_t         maker_fee_ratio;
+        bool            only_accept_coin_fee;
+        bool            enabled;
+        uint64_t        farm_lease_id;
+        int64_t         farm_ratio;
+        int64_t         parent_fee_ratio;
+        int64_t         grand_fee_ratio;
 
         uint64_t primary_key() const { return sympair_id; }
         inline uint256_t get_symbols_idx() const { return make_symbols_idx(asset_symbol, coin_symbol); }
@@ -200,11 +223,11 @@ namespace dex {
     }
 
     using order_match_idx_key = uint256_t;
-    inline static order_match_idx_key make_order_match_idx(const uint64_t& sympair_id, 
-                                                           const order_status_t &status,
-                                                           const order_side_t &side,
-                                                           const uint64_t& price,
-                                                           const uint64_t& order_id) {
+    inline static order_match_idx_key make_order_match_idx(const uint64_t&       sympair_id, 
+                                                           const order_status_t& status,
+                                                           const order_side_t&   side,
+                                                           const uint64_t&       price,
+                                                           const uint64_t&       order_id) {
 
         uint64_t option = uint64_t(order_status::index(status)) << 56 
                         | uint64_t(order_side::index(side))     << 48 ;
@@ -220,23 +243,23 @@ namespace dex {
     }
 
     struct DEX_TABLE order_t {
-        uint64_t order_id; // auto-increment
-        uint64_t external_id; // external id
-        name owner;
-        uint64_t sympair_id; // id of symbol_pair_table
-        order_side_t order_side;
-        asset price;
-        asset limit_quant;
-        asset frozen_quant;
-        int64_t taker_fee_ratio;
-        int64_t maker_fee_ratio;
-        asset matched_assets;      //!< total matched asset quantity
-        asset matched_coins;       //!< total matched coin quantity
-        asset matched_fee;        //!< total matched fees
-        order_status_t status;
-        time_point created_at;
-        time_point last_updated_at;
-        uint64_t   last_deal_id;
+        uint64_t        order_id;           // auto-increment
+        uint64_t        external_id;        // external id
+        name            owner;
+        uint64_t        sympair_id;         // id of symbol_pair_table
+        order_side_t    order_side;
+        asset           price;
+        asset           limit_quant;
+        asset           frozen_quant;
+        int64_t         taker_fee_ratio;
+        int64_t         maker_fee_ratio;
+        asset           matched_assets;     //!< total matched asset quantity
+        asset           matched_coins;      //!< total matched coin quantity
+        asset           matched_fee;        //!< total matched fees
+        order_status_t  status;
+        time_point      created_at;
+        time_point      last_updated_at;
+        uint64_t        last_deal_id;
         uint64_t primary_key() const { return order_id; }
 
         uint64_t by_owner()const { return owner.value; }
@@ -275,43 +298,34 @@ namespace dex {
                 PP(last_updated_at),
                 PP(last_deal_id)
             );
-
         }
     };
 
-    using order_owner_idx = indexed_by<"orderowner"_n, const_mem_fun<order_t, uint64_t, &order_t::by_owner> >;
     using order_match_idx = indexed_by<"ordermatch"_n, const_mem_fun<order_t, order_match_idx_key, &order_t::get_order_match_idx> >;
     using order_updated_at_idx = indexed_by<"orderupdated"_n, const_mem_fun<order_t, uint128_t, &order_t::by_updated_at> >;
 
-    typedef eosio::multi_index<"order"_n, order_t, order_owner_idx, order_match_idx, order_updated_at_idx> order_tbl;
-    typedef eosio::multi_index<"queue"_n, order_t, order_owner_idx, order_match_idx, order_updated_at_idx> queue_tbl;
+    typedef eosio::multi_index<"order"_n, order_t, order_match_idx, order_updated_at_idx> order_tbl;
+    typedef eosio::multi_index<"queue"_n, order_t, order_match_idx, order_updated_at_idx> queue_tbl;
 
-    inline static order_tbl make_order_table(const name &self) { return order_tbl(self, self.value/*scope*/); }
+    inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id, const order_side_t& side ) { \
+                        return order_tbl(self, pair_id << 8 | uint64_t(order_side::index(side))); \
+                    }
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
 
-    struct DEX_TABLE deal_item_t {
-        uint64_t id;
-        uint64_t sympair_id;
-        uint64_t buy_order_id;
-        uint64_t sell_order_id;
-        asset deal_assets;
-        asset deal_coins;
-        asset deal_price;
+    struct deal_item_t {
+        uint64_t    id;
+        uint64_t    sympair_id;
+        uint64_t    buy_order_id;
+        uint64_t    sell_order_id;
+        asset       deal_assets;
+        asset       deal_coins;
+        asset       deal_price;
         order_side_t taker_side;
-        asset buy_fee;
-        asset sell_fee;
-        asset buy_refund_coins;
-        string memo;
-        time_point deal_time;
-
-        uint64_t primary_key() const { return id; }
-
-        uint64_t get_buy_id() const {
-            return buy_order_id;
-        }
-        uint64_t get_sell_id() const {
-            return sell_order_id;
-        }
+        asset       buy_fee;
+        asset       sell_fee;
+        asset       buy_refund_coins;
+        string      memo;
+        time_point  deal_time;
 
         void print() const {
             auto deal_time = this->deal_time.elapsed.count(); // print the ms value
@@ -330,16 +344,8 @@ namespace dex {
                 PP(memo),
                 PP(deal_time)
             );
-
         }
-
     };
-
-    typedef eosio::multi_index<"deal"_n, deal_item_t> deal_table;
-
-    inline static deal_table make_deal_table(const name &self) {
-        return deal_table(self, self.value/*scope*/);
-    }
 
     struct DEX_TABLE rewards_t
     {
@@ -358,30 +364,5 @@ namespace dex {
         
     typedef eosio::multi_index<"sympair"_n, symbol_pair_t, symbols_idx> symbol_pair_table;
     inline static rewards_tbl make_reward_table(const name &self) { return rewards_tbl(self, self.value/*scope*/); }
-
-    // struct DEX_TABLE quotes_t
-    // {
-    //     uint64_t sympair_id;
-    //     symbol quote_symbol;
-    //     uint64_t open;
-    //     uint64_t high;
-    //     uint64_t low;
-    //     uint64_t close;
-    //     uint64_t pre_close;
-    //     uint64_t volume;
-    //     uint64_t amount;
-    //     time_point_sec updated_at;
-
-    //     uint64_t primary_key() const { return sympair_id; }
-
-    //     quotes_t() {}
-    //     quotes_t(const uint64_t &psympair_id) : sympair_id(psympair_id) {}
-
-    //     typedef wasm::db::multi_index<"quotes"_n, quotes_t> idx_t;
-
-    //     EOSLIB_SERIALIZE(quotes_t, (sympair_id)(quote_symbol)(open)(high)
-    //         (low)(close)(pre_close)(volume)(amount)
-    //         (updated_at))
-    // };
 
 }// namespace dex

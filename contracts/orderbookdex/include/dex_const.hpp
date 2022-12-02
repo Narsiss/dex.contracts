@@ -19,19 +19,19 @@ using namespace eosio;
 
 #define SYMBOL(sym_code, precision) symbol(symbol_code(sym_code), precision)
 
-static constexpr name SYS_ACCOUNT = name("amax");
-static constexpr name SYS_BANK = name("amax.token");
-static constexpr symbol SYS_TOKEN = SYMBOL("AMAX",8);
+static constexpr name   SYS_ACCOUNT     = name("amax");
+static constexpr name   SYS_BANK        = name("amax.token");
+static constexpr symbol SYS_TOKEN       = SYMBOL("AMAX",8);
 
-static constexpr name MIRROR_BANK = name("amax.mtoken");
-static constexpr symbol MIRROR_USDT = SYMBOL("MUSDT",6);
-static constexpr symbol MIRROR_BTC = SYMBOL("MUSDT",6);
-static constexpr symbol MIRROR_ETH = SYMBOL("METH",6);
-static constexpr symbol MIRROR_BNB = SYMBOL("MBNB",8);
+static constexpr name   MIRROR_BANK     = name("amax.mtoken");
+static constexpr symbol MIRROR_USDT     = SYMBOL("MUSDT",6);
+static constexpr symbol MIRROR_BTC      = SYMBOL("MUSDT",6);
+static constexpr symbol MIRROR_ETH      = SYMBOL("METH",6);
+static constexpr symbol MIRROR_BNB      = SYMBOL("MBNB",8);
 
-static constexpr name APL_FARM = "aplinkfarm"_n;
-static constexpr name APL_BANK = "aplink.token"_n;
-static constexpr symbol APL_SYMBOL = SYMBOL("APL",4);
+static constexpr name   APL_FARM        = "aplinkfarm"_n;
+static constexpr name   APL_BANK        = "aplink.token"_n;
+static constexpr symbol APL_SYMBOL      = SYMBOL("APL",4);
 
 
 #define DEX_CONTRACT_PROP eosio::contract("orderbookdex")
@@ -39,3 +39,5 @@ static constexpr symbol APL_SYMBOL = SYMBOL("APL",4);
 #define DEX_TABLE [[eosio::table, DEX_CONTRACT_PROP]]
 #define DEX_TABLE_NAME(name) [[eosio::table(name), DEX_CONTRACT_PROP]]
 
+#define CHECKC(exp, code, msg) \
+   { if (!(exp)) eosio::check(false, std::string("$$$") + std::to_string((int)code) + std::string("$$$ ") + msg); }

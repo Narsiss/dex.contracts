@@ -72,7 +72,7 @@ public:
      */
     [[eosio::action]] void match(const name &matcher, uint32_t max_count, const string &memo);
 
-    [[eosio::action]] void cancel(const uint64_t &order_id);
+    [[eosio::action]] void cancel(const uint64_t& pair_id, const name& side, const uint64_t &order_id);
 
     [[eosio::action]] void cleandata(const uint64_t &max_count);
 
@@ -139,6 +139,9 @@ private:
     bool check_data_outdated(const time_point &data_time, const time_point &now);
 
     bool check_dex_enabled();
+
+    //Send deal action
+    void _send_deal_action( const dex::deal_item_t& deal_item );
 
     dex::config_table _conf_tbl;
     dex::config _config;
