@@ -126,11 +126,12 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     CHECK( quant.amount > 0, "The quantity must be positive")
 
     auto params = split(memo, ":");
-    if (params.size() == 2 && params[0] == "submit") {
-        uint64_t order_id = to_uint64(params[1], "invalid order_id");
+    if (params.size() == 1 && params[0] == "submit") {
+        
         auto queue_tbl = make_queue_table(get_self());
-        auto order_itr = queue_tbl.find(order_id);
-        CHECK( order_itr != queue_tbl.end() , "The order not in queue: order_id=" + std::to_string(order_id));
+        auto queue_owner_idx = queue_tbl.get_index<"orderowner"_n>();
+        auto order_itr = queue_owner_idx.find(from.value);
+        CHECK( order_itr != queue_owner_idx.end() , "The order not in queue: from=" + from.to_string());
 
         auto sympair_tbl = make_sympair_table(get_self());
         auto sympair_id = order_itr->sympair_id;
@@ -148,11 +149,12 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
         CHECK( order_itr->frozen_quant == quant, "require quantity is " + order_itr->frozen_quant.to_string() )
 
         auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_side );
+        auto order_id = _global->new_order_id();
         order_tbl.emplace(_self, [&](auto &order_info) {
-            order_info = *order_itr;
-            order_info.status = order_status::MATCHABLE;
+            order_info          = *order_itr;
+            order_info.order_id = order_id;   
         });
-        queue_tbl.erase(order_itr);
+        queue_owner_idx.erase(order_itr);
 
         if (_config.max_match_count > 0) {
             uint32_t matched_count = 0;
@@ -173,8 +175,6 @@ void dex_contract::cancel(const uint64_t& pair_id, const name& side, const uint6
     // TODO: support the owner auth to cancel order?
     require_auth(order.owner);
 
-    CHECK(order.status == order_status::MATCHABLE, "The order can not be canceled");
-
     auto sympair_tbl = make_sympair_table(get_self());
     auto sym_pair_it = sympair_tbl.find(order.sympair_id);
     CHECK( sym_pair_it != sympair_tbl.end(),
@@ -194,11 +194,8 @@ void dex_contract::cancel(const uint64_t& pair_id, const name& side, const uint6
     if (quantity.amount > 0) {
         add_balance(order.owner, bank, quantity, balance_type::ordercancel, "order cancel: " + to_string(order_id));
     }
+    order_tbl.erase(it);
 
-    order_tbl.modify(it, same_payer, [&]( auto& a ) {
-        a.status = order_status::CANCELED;
-        a.last_updated_at = current_block_time();
-    });
 }
 
 dex::config dex_contract::get_default_config() {
@@ -252,7 +249,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
                                   uint32_t max_count, uint32_t &matched_count, const string &memo) {
     auto cur_block_time = current_block_time();
     auto order_tbl = make_order_table(get_self(), sym_pair.sympair_id, matcher );  //TODO
-    auto match_index = order_tbl.get_index<static_cast<name::raw>(order_match_idx::index_name)>();
+    auto match_index = order_tbl.get_index<static_cast<name::raw>(order_price_idx::index_name)>();
 
     auto matching_pair_it = dex::matching_pair_iterator(match_index, sym_pair);
 
@@ -498,15 +495,16 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         frozen_quant = limit_quant;
     }
 
-    auto queue_tbl = make_queue_table(get_self());
-
     const auto &fee_symbol = (order_side == dex::order_side::BUY && !sym_pair_it->only_accept_coin_fee) ?
             asset_symbol : coin_symbol;
 
-    auto order_id = _global->new_order_id();
-    CHECK( queue_tbl.find(order_id) == queue_tbl.end(), "The order exists: order_id=" + std::to_string(order_id));
+    auto queue_tbl = make_queue_table(get_self());
+    auto acct_idx = queue_tbl.get_index<"orderowner"_n>();
+
+    CHECK( acct_idx.find(user.value) == acct_idx.end(), "The user exists: user=" + user.to_string());
 
     auto cur_block_time = current_block_time();
+    auto order_id = _global->new_queue_order_id();
     queue_tbl.emplace(get_self(), [&](auto &order) {
         order.order_id = order_id;
         order.external_id = external_id;
@@ -521,7 +519,6 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         order.matched_assets = asset(0, asset_symbol);
         order.matched_coins = asset(0, coin_symbol);
         order.matched_fee = asset(0, fee_symbol);
-        order.status = order_status::QUEUE;
         order.created_at = cur_block_time;
         order.last_updated_at = cur_block_time;
         order.last_deal_id = 0;

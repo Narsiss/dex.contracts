@@ -70,9 +70,9 @@ namespace dex {
 
             TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
             if (_order_side == order_side::BUY) {
-                _key = make_order_match_idx( _order_side, std::numeric_limits<uint64_t>::max());
+                _key = make_order_price_idx( _order_side, std::numeric_limits<uint64_t>::max());
             } else { // _order_side == order_side::SELL
-                _key = make_order_match_idx( _order_side, 0);
+                _key = make_order_price_idx( _order_side, 0);
             }
             _it = _match_index.upper_bound(_key);
             process_data();
@@ -84,14 +84,15 @@ namespace dex {
             ASSERT(is_completed());
             const auto &store_order = *_it;
             _it++;
-            table.modify(store_order, same_payer, [&]( auto& a ) {
-                a.matched_assets = _matched_assets;
-                a.matched_coins = _matched_coins;
-                a.matched_fee = _matched_fee;
-                a.status = order_status::COMPLETED;
-                a.last_updated_at = current_block_time();
-                a.last_deal_id = _last_deal_id;
-            });
+            table.erase(store_order);
+            // table.modify(store_order, same_payer, [&]( auto& a ) {
+            //     a.matched_assets = _matched_assets;
+            //     a.matched_coins = _matched_coins;
+            //     a.matched_fee = _matched_fee;
+            //     a.status = order_status::COMPLETED;
+            //     a.last_updated_at = current_block_time();
+            //     a.last_deal_id = _last_deal_id;
+            // });
             process_data();
         }
 
@@ -189,11 +190,10 @@ namespace dex {
             }
 
             const auto &stored_order = *_it;
-            CHECK(_key < stored_order.get_order_match_idx(), "the start key must < found order key");
-            // TRACE("start key=", key, ", found key=", stored_order.get_order_match_idx(), "\n");
+            CHECK(_key < stored_order.get_order_price_idx(), "the start key must < found order key");
+            // TRACE("start key=", key, ", found key=", stored_order.get_order_price_idx(), "\n");
 
-            if (stored_order.sympair_id != _sym_pair_id || stored_order.status != order_status::MATCHABLE ||
-                stored_order.order_side != _order_side ) {
+            if (stored_order.sympair_id != _sym_pair_id || stored_order.order_side != _order_side ) {
                 return;
             }
             TRACE("found order! order=", stored_order, "\n");
@@ -207,7 +207,7 @@ namespace dex {
         }
 
         match_index_t &_match_index;
-        order_match_idx_key _key;
+        order_price_idx_key _key;
         typename match_index_t::const_iterator _it;
         uint64_t _sym_pair_id;
         order_side_t _order_side;
