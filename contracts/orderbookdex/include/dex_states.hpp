@@ -141,8 +141,6 @@ namespace dex {
             return (pair_id << 49 | (uint64_t)order_side::index(side) << 48 | order_id);
         }
 
-
-
         inline uint64_t new_queue_order_id() {
             return new_auto_inc_id(queue_order_id);
         }

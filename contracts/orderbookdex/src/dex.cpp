@@ -127,7 +127,6 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
 
     auto params = split(memo, ":");
     if (params.size() == 1 && params[0] == "submit") {
-
         auto queue_tbl = make_queue_table(get_self());
         auto queue_owner_idx = queue_tbl.get_index<"orderowner"_n>();
         auto order_itr = queue_owner_idx.find(from.value);
