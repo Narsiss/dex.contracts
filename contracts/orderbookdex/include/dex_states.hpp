@@ -136,9 +136,12 @@ namespace dex {
             return id;
         }
 
-        inline uint64_t new_order_id() {
-            return new_auto_inc_id(order_id);
+        inline uint64_t new_order_id(const uint64_t& pair_id, const order_side_t& side) {
+            uint64_t order_id =  new_auto_inc_id(order_id);
+            return (pair_id << 49 | (uint64_t)order_side::index(side) << 48 | order_id);
         }
+
+
 
         inline uint64_t new_queue_order_id() {
             return new_auto_inc_id(queue_order_id);

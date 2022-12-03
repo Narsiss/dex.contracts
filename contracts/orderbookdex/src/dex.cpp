@@ -127,7 +127,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
 
     auto params = split(memo, ":");
     if (params.size() == 1 && params[0] == "submit") {
-        
+
         auto queue_tbl = make_queue_table(get_self());
         auto queue_owner_idx = queue_tbl.get_index<"orderowner"_n>();
         auto order_itr = queue_owner_idx.find(from.value);
@@ -149,7 +149,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
         CHECK( order_itr->frozen_quant == quant, "require quantity is " + order_itr->frozen_quant.to_string() )
 
         auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_side );
-        auto order_id = _global->new_order_id();
+        auto order_id = _global->new_order_id(order_itr->sympair_id, order_itr->order_side);
         order_tbl.emplace(_self, [&](auto &order_info) {
             order_info          = *order_itr;
             order_info.order_id = order_id;   
