@@ -54,77 +54,57 @@ namespace dex {
         return calc_match_fee(ratio, quant);
     }
 
-    template<typename match_index_t>
+    template<typename table_t, typename price_index_t>
     class matching_order_iterator {
     public:
-        enum status_t {
-            CLOSED,
-            OPENED,
-            MATCHING,
-            COMPLETED
-        };
-    public:
-        matching_order_iterator(match_index_t &match_index, uint64_t sympair_id, order_side_t side)
-            : _match_index(match_index), _it(match_index.end()), _sym_pair_id(sympair_id),
-              _order_side(side) {
-
+        matching_order_iterator(const table_t& table, const price_index_t price_idx, uint64_t sympair_id, order_side_t side)
+            : _sym_pair_id(sympair_id), _order_side(side), _table(table), _price_idx(price_idx)
+        {
+            _it             = _price_idx.begin();
             TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
-            if (_order_side == order_side::BUY) {
-                _key = make_order_price_idx( _order_side, std::numeric_limits<uint64_t>::max());
-            } else { // _order_side == order_side::SELL
-                _key = make_order_price_idx( _order_side, 0);
-            }
-            _it = _match_index.upper_bound(_key);
             process_data();
-            
         };
 
-        template<typename table_t>
-        void complete_and_next(table_t &table) {
-            ASSERT(is_completed());
+        void complete_and_next() {
+            // ASSERT(is_completed()); TODO
             const auto &store_order = *_it;
             _it++;
-            table.erase(store_order);
+            _order_tbl.erase(store_order);
             // table.modify(store_order, same_payer, [&]( auto& a ) {
             //     a.matched_assets = _matched_assets;
             //     a.matched_coins = _matched_coins;
             //     a.matched_fee = _matched_fee;
-            //     a.status = order_status::COMPLETED;
             //     a.last_updated_at = current_block_time();
             //     a.last_deal_id = _last_deal_id;
             // });
             process_data();
         }
 
-        template<typename table_t>
-        void save_matching_order(table_t &table) {
-            if (is_matching()) {
-                table.modify(*_it, same_payer, [&]( auto& a ) {
-                    a.matched_assets = _matched_assets;
-                    a.matched_coins = _matched_coins;
-                    a.matched_fee = _matched_fee;
-                    a.last_updated_at = current_block_time();
-                    a.last_deal_id = _last_deal_id;
-                });
-            }
+        void save_matching_order() {        //TODO check matching status
+            _order_tbl.modify(*_it, same_payer, [&]( auto& a ) {
+                a.matched_assets = _matched_assets;
+                a.matched_coins = _matched_coins;
+                a.matched_fee = _matched_fee;
+                a.last_updated_at = current_block_time();
+                a.last_deal_id = _last_deal_id;
+            });
         }
 
         inline const order_t &stored_order() {
-            ASSERT(is_valid());
             return *_it;
         }
 
-        inline void match(uint64_t deal_id, const asset &new_matched_assets, const asset &new_matched_coins, const asset &new_matched_fee) {
-            ASSERT(_status == OPENED || _status == MATCHING);
-            if (_status == OPENED) {
-                _status = MATCHING;
-            }
-            bool completed = false;
+        inline void match(uint64_t deal_id,
+                    const asset &new_matched_assets,
+                    const asset &new_matched_coins,
+                    const asset &new_matched_fee) {
+    
+            bool completed = false; 
 
-            _last_deal_id = deal_id;
+            _last_deal_id   = deal_id;
             _matched_assets += new_matched_assets;
-            _matched_coins += new_matched_coins;
-            _matched_fee += new_matched_fee;
+            _matched_coins  += new_matched_coins;
+            _matched_fee    += new_matched_fee;
             const auto &order = *_it;
 
             CHECK(_matched_assets <= order.limit_quant,
@@ -140,40 +120,23 @@ namespace dex {
                         "The total_matched_coins=" + _matched_coins.to_string() +
                         " is overflow with frozen_quant=" + order.frozen_quant.to_string() + " for buy order");
                 if (completed) {
-                    _status = COMPLETED;
                     if (order.frozen_quant > total_matched_coins) {
                         _refund_coins = order.frozen_quant - total_matched_coins;
                     }
                 }
             }
-
-            if (completed) {
-                _status = COMPLETED;
-            }
         }
-
-        inline bool is_valid() const {
-            return _status != CLOSED;
-        }
-
-        inline bool is_completed() const {
-            return _status == COMPLETED;
-        }
-
-        inline bool is_matching() const {
-            return _status == MATCHING;
-        }
+        
 
         inline asset get_free_limit_quant() const {
-            ASSERT(is_valid());
-            asset ret;
-            ret = _it->limit_quant - _matched_assets;
+            ASSERT(_it != _price_index().end());
+            asset ret = _it->limit_quant - _matched_assets;
             ASSERT(ret.amount >= 0);
             return ret;
         }
 
         inline asset get_refund_coins() const {
-            ASSERT(is_completed());
+            ASSERT(_it != _price_index().end());
             return _refund_coins;
         }
 
@@ -183,71 +146,65 @@ namespace dex {
 
     private:
         void process_data() {
-            _status = CLOSED;
-            if (_it == _match_index.end()) {
+            if (_it == _price_index().end()) {
                 TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
                 return;
             }
 
             const auto &stored_order = *_it;
-            CHECK(_key < stored_order.get_order_price_idx(), "the start key must < found order key");
-            // TRACE("start key=", key, ", found key=", stored_order.get_order_price_idx(), "\n");
-
-            if (stored_order.sympair_id != _sym_pair_id || stored_order.order_side != _order_side ) {
-                return;
-            }
             TRACE("found order! order=", stored_order, "\n");
 
-            _last_deal_id = stored_order.last_deal_id;
+            _last_deal_id   = stored_order.last_deal_id;
             _matched_assets = stored_order.matched_assets;
             _matched_coins  = stored_order.matched_coins;
-            _matched_fee  = stored_order.matched_fee;
-            _refund_coins = asset(0, _matched_coins.symbol);
-            _status = OPENED;
+            _matched_fee    = stored_order.matched_fee;
+            _refund_coins   = asset(0, _matched_coins.symbol);
         }
 
-        match_index_t &_match_index;
-        order_price_idx_key _key;
-        typename match_index_t::const_iterator _it;
-        uint64_t _sym_pair_id;
-        order_side_t _order_side;
-        status_t _status = CLOSED;
+        table_t&                _order_tbl;
+        price_index_t&          _price_idx;
+        typename price_index_t::const_iterator _it;
+        uint64_t                _sym_pair_id;
+        order_side_t            _order_side;
 
-        uint64_t _last_deal_id = 0;
-        asset _matched_assets;      //!< total matched asset amount
-        asset _matched_coins;       //!< total matched coin amount
-        asset _matched_fee;        //!< total matched fees
-        asset _refund_coins;
-
+        uint64_t                _last_deal_id = 0;
+        asset                   _matched_assets;      //!< total matched asset amount
+        asset                   _matched_coins;       //!< total matched coin amount
+        asset                   _matched_fee;        //!< total matched fees
+        asset                   _refund_coins;
     };
 
-
-    template<typename match_index_t>
+    template<typename table_t, typename price_index_t>
     class matching_pair_iterator {
     public:
-        using order_iterator = matching_order_iterator<match_index_t>;
-        using order_iterator_vector = std::vector<order_iterator*>;
+        using order_iterator = matching_order_iterator<order_tbl,price_idx>;
 
-        matching_pair_iterator(match_index_t &match_index, const dex::symbol_pair_t &sym_pair)
-            : _match_index(match_index), _sym_pair(sym_pair),
-            limit_buy_it(match_index, sym_pair.sympair_id, order_side::BUY),
-            limit_sell_it(match_index, sym_pair.sympair_id, order_side::SELL){
+        matching_pair_iterator(const name contract, const dex::symbol_pair_t &sym_pair )
+            :  _sym_pair(sym_pair) {
+            _order_buy_tbl  = make_order_table( contract, sym_pair.sympair_id, side );
+            _order_sell_tbl = make_order_table( contract, sym_pair.sympair_id, side )
 
+            _buy_price_idx  = _order_buy_tbl.get_index<"orderprice"_n>();
+            _sell_price_idx = _order_sell_tbl.get_index<"orderprice"_n>();
+
+            limit_buy_it(_order_buy_tbl, _order_buy_tbl, sym_pair.sympair_id, order_side::BUY),
+            limit_sell_it(_order_sell_tbl, _order_sell_tbl, sym_pair.sympair_id, order_side::SELL),
             process_data();
         }
 
-        template<typename table_t>
-        void complete_and_next(table_t &table) {
+        void complete_and_next() {
             if (_taker_it->is_completed()) {
-                _taker_it->complete_and_next(table);
+                _taker_it->complete_and_next();
+            }
+            if (_maker_it->is_completed()) {
+                _maker_it->complete_and_next();
             }
             process_data();
         }
 
-        template<typename table_t>
-        void save_matching_order(table_t &table) {
-            limit_buy_it.save_matching_order(table);
-            limit_sell_it.save_matching_order(table);
+        void save_matching_order() {
+            limit_buy_it.save_matching_order( );
+            limit_sell_it.save_matching_order( );
         }
 
         bool can_match() const  {
@@ -286,11 +243,16 @@ namespace dex {
 
     private:
         const dex::symbol_pair_t &_sym_pair;
-        match_index_t &_match_index;
+
         order_iterator limit_buy_it;
         order_iterator limit_sell_it;
         order_iterator *_taker_it = nullptr;
         order_iterator *_maker_it = nullptr;
+        table_t&        _order_buy_tbl;
+        table_t&        _order_sell_tbl;
+        match_index_t&  _buy_price_idx;
+        match_index_t&  _sell_price_idx;
+
         bool _can_match = false;
 
         void process_data() {
@@ -300,11 +262,14 @@ namespace dex {
     
             if (!_can_match) {
                 _can_match = true;
-                if (limit_buy_it.is_valid() && limit_sell_it.is_valid() && limit_buy_it.stored_order().price >= limit_sell_it.stored_order().price) {
-                    if (limit_buy_it.stored_order().order_id > limit_sell_it.stored_order().order_id) {
+                if ( limit_buy_it.is_valid() && limit_sell_it.is_valid() &&
+                     limit_buy_it.stored_order().price >= limit_sell_it.stored_order().price ) {
+                    if ( limit_buy_it.stored_order().order_id > limit_sell_it.stored_order().order_id ) {
                         _taker_it = &limit_buy_it;
+                        _maker_it = &limit_sell_it;
                     } else {
                         _taker_it = &limit_sell_it;
+                        _maker_it = &limit_buy_it;
                     }
                 } else {
                     _can_match = false;

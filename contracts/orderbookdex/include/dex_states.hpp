@@ -207,15 +207,15 @@ namespace dex {
     }
 
     using order_price_idx_key = uint64_t;
-    inline static order_price_idx_key make_order_price_idx( const order_side_t& side, const uint64_t& price ) {
-        uint64_t price_factor = (side == order_side::BUY) ? std::numeric_limits<uint64_t>::max() - price : price;
+    inline static order_price_idx_key make_order_price_idx( const order_side_t& side ) {
+        uint64_t price_factor = (side == order_side::BUY) ? std::numeric_limits<uint64_t>::max()  : 0;
         return price_factor;
     }
 
     uint128_t make_uint128(uint64_t high_val, uint64_t low_val) {
         return uint128_t(high_val) << 64 | uint128_t(low_val);
     }
-
+    //scope: order_side +  sympair_id
     struct DEX_TABLE order_t {
         uint64_t        order_id;           // auto-increment
         uint64_t        external_id;        // external id
@@ -237,11 +237,13 @@ namespace dex {
         uint64_t primary_key() const    { return order_id; }
         uint64_t by_owner()const        { return owner.value; }
         uint64_t by_external_id()const  { return external_id; }
-        uint64_t get_price()const       { return  price.amount; }
-
+        uint64_t get_price()const       { 
+            return order_side == order_side::BUY ? price.amount : 
+                                std::numeric_limits<uint64_t>::max() - price.amount;
+         }
 
         order_price_idx_key get_order_price_idx()const { 
-            return make_order_price_idx( order_side, price.amount); 
+            return make_order_price_idx( order_side ); 
         }
 
         void print() const {
