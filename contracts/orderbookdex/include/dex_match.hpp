@@ -54,22 +54,45 @@ namespace dex {
         return calc_match_fee(ratio, quant);
     }
 
-    template<typename table_t, typename price_index_t>
+
+
+    template<typename table_t, typename index_t>
+    class table_index_iterator {
+    public:
+        using table_uptr = std::shared_ptr<table_t>;
+        using index_uptr = std::shared_ptr<index_t>;
+        using const_iterator = typename index_t::const_iterator;
+
+        table_index_iterator(table_uptr tbl, index_uptr idx, const_iterator itr) :
+            tbl(tbl), idx(idx), itr(itr) {}
+
+        table_uptr tbl;
+        index_uptr idx;
+        const_iterator itr;
+
+        inline bool is_valid() const {
+            return itr != idx->end();
+        }
+    };
+
+    template<typename table_t, typename index_t>
     class matching_order_iterator {
     public:
-        matching_order_iterator(const table_t& table, const price_index_t price_idx, uint64_t sympair_id, order_side_t side)
-            : _sym_pair_id(sympair_id), _order_side(side), _table(table), _price_idx(price_idx)
+        using table_index_iterator_ptr = std::shared_ptr<table_index_iterator<table_t, index_t>>;
+        matching_order_iterator(table_index_iterator_ptr idx_itr, uint64_t sympair_id, order_side_t side)
+            : _idx_itr(idx_itr), _sym_pair_id(sympair_id), _order_side(side)
         {
-            _it             = _price_idx.begin();
-            TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
+            // _it             = _price_idx.begin();
+            // TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
             process_data();
         };
 
         void complete_and_next() {
             // ASSERT(is_completed()); TODO
-            const auto &store_order = *_it;
-            _it++;
-            _order_tbl.erase(store_order);
+            // const auto &store_order = *_it;
+            // _idx_itr->itr++;
+            ASSERT(_idx_itr->is_valid());
+            _idx_itr->itr = _idx_itr->idx->erase(_idx_itr->itr);
             // table.modify(store_order, same_payer, [&]( auto& a ) {
             //     a.matched_assets = _matched_assets;
             //     a.matched_coins = _matched_coins;
@@ -81,7 +104,8 @@ namespace dex {
         }
 
         void save_matching_order() {        //TODO check matching status
-            _order_tbl.modify(*_it, same_payer, [&]( auto& a ) {
+            ASSERT(_idx_itr->is_valid());
+            _idx_itr->idx->modify(_idx_itr->itr, same_payer, [&]( auto& a ) {
                 a.matched_assets = _matched_assets;
                 a.matched_coins = _matched_coins;
                 a.matched_fee = _matched_fee;
@@ -91,27 +115,27 @@ namespace dex {
         }
 
         inline const order_t &stored_order() {
-            return *_it;
+            return *_idx_itr->itr;
         }
 
         inline void match(uint64_t deal_id,
                     const asset &new_matched_assets,
                     const asset &new_matched_coins,
                     const asset &new_matched_fee) {
-    
-            bool completed = false; 
+
+            bool completed = false;
 
             _last_deal_id   = deal_id;
             _matched_assets += new_matched_assets;
             _matched_coins  += new_matched_coins;
             _matched_fee    += new_matched_fee;
-            const auto &order = *_it;
+            const auto &order = *_idx_itr->itr;
 
             CHECK(_matched_assets <= order.limit_quant,
                 "The matched assets=" + _matched_assets.to_string() +
                 " is overflow with limit_quant=" + order.limit_quant.to_string());
             completed = _matched_assets == order.limit_quant;
-            
+
             if (order.order_side == order_side::BUY) {
                 auto total_matched_coins = (_matched_coins.symbol == _matched_fee.symbol) ?
                     _matched_coins + _matched_fee // the buyer pay fee with coins
@@ -126,32 +150,40 @@ namespace dex {
                 }
             }
         }
-        
+
 
         inline asset get_free_limit_quant() const {
-            ASSERT(_it != _price_index().end());
-            asset ret = _it->limit_quant - _matched_assets;
+            ASSERT(_idx_itr->is_valid());
+            asset ret = _idx_itr->itr->limit_quant - _matched_assets;
             ASSERT(ret.amount >= 0);
             return ret;
         }
 
         inline asset get_refund_coins() const {
-            ASSERT(_it != _price_index().end());
+            ASSERT(_idx_itr->is_valid());
             return _refund_coins;
         }
 
-        const order_side_t &order_side() const {
-            return _order_side; 
+        inline const order_side_t &order_side() const {
+            return _order_side;
+        }
+
+        inline bool is_valid() const {
+            return _idx_itr->is_valid();
+        }
+
+        inline bool is_completed() const {
+            return false; // TODO: ...
         }
 
     private:
         void process_data() {
-            if (_it == _price_index().end()) {
+            if (!_idx_itr->is_valid()) {
                 TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
                 return;
             }
 
-            const auto &stored_order = *_it;
+            const auto &stored_order = *_idx_itr->itr;
             TRACE("found order! order=", stored_order, "\n");
 
             _last_deal_id   = stored_order.last_deal_id;
@@ -161,82 +193,83 @@ namespace dex {
             _refund_coins   = asset(0, _matched_coins.symbol);
         }
 
-        table_t&                _order_tbl;
-        price_index_t&          _price_idx;
-        typename price_index_t::const_iterator _it;
-        uint64_t                _sym_pair_id;
-        order_side_t            _order_side;
+        // table_t&                _order_tbl;
+        // price_index_t&          _price_idx;
+        // typename price_index_t::const_iterator _it;
+        table_index_iterator_ptr    _idx_itr;
+        uint64_t                    _sym_pair_id;
+        order_side_t                _order_side;
 
-        uint64_t                _last_deal_id = 0;
-        asset                   _matched_assets;      //!< total matched asset amount
-        asset                   _matched_coins;       //!< total matched coin amount
-        asset                   _matched_fee;        //!< total matched fees
-        asset                   _refund_coins;
+        uint64_t                    _last_deal_id = 0;
+        asset                       _matched_assets;      //!< total matched asset amount
+        asset                       _matched_coins;       //!< total matched coin amount
+        asset                       _matched_fee;        //!< total matched fees
+        asset                       _refund_coins;
     };
 
-    template<typename table_t, typename price_index_t>
+    template<typename order_iterator_t>
     class matching_pair_iterator {
     public:
-        using order_iterator = matching_order_iterator<order_tbl,price_idx>;
+        using order_iterator_ptr = std::shared_ptr<order_iterator_t>;
 
-        matching_pair_iterator(const name contract, const dex::symbol_pair_t &sym_pair )
-            :  _sym_pair(sym_pair) {
-            _order_buy_tbl  = make_order_table( contract, sym_pair.sympair_id, side );
-            _order_sell_tbl = make_order_table( contract, sym_pair.sympair_id, side )
+        matching_pair_iterator(const dex::symbol_pair_t& sym_pair, order_iterator_ptr buy_itr, order_iterator_ptr sell_itr )
+            : _sym_pair(sym_pair), _buy_itr(buy_itr), _sell_itr(sell_itr)  {
+            // _order_buy_tbl  = make_order_table( contract, sym_pair.sympair_id, side );
+            // _order_sell_tbl = make_order_table( contract, sym_pair.sympair_id, side )
 
-            _buy_price_idx  = _order_buy_tbl.get_index<"orderprice"_n>();
-            _sell_price_idx = _order_sell_tbl.get_index<"orderprice"_n>();
+            // auto buy_price_idx  = _order_buy_tbl.get_index<"orderprice"_n>();
+            // auto _sell_price_idx = _order_sell_tbl.get_index<"orderprice"_n>();
 
-            limit_buy_it(_order_buy_tbl, _order_buy_tbl, sym_pair.sympair_id, order_side::BUY),
-            limit_sell_it(_order_sell_tbl, _order_sell_tbl, sym_pair.sympair_id, order_side::SELL),
+            // _buy_itr(_order_buy_tbl, buy_price_idx, sym_pair.sympair_id, order_side::BUY),
+            // _sell_itr(_order_sell_tbl, _sell_price_idx, sym_pair.sympair_id, order_side::SELL),
             process_data();
         }
 
         void complete_and_next() {
-            if (_taker_it->is_completed()) {
-                _taker_it->complete_and_next();
+            if (_taker_itr->is_completed()) {
+                _taker_itr->complete_and_next();
             }
-            if (_maker_it->is_completed()) {
-                _maker_it->complete_and_next();
+            if (_maker_itr->is_completed()) {
+                _maker_itr->complete_and_next();
             }
             process_data();
         }
 
         void save_matching_order() {
-            limit_buy_it.save_matching_order( );
-            limit_sell_it.save_matching_order( );
+            _buy_itr->save_matching_order( );
+            _sell_itr->save_matching_order( );
         }
 
         bool can_match() const  {
             return _can_match;
         }
 
-        order_iterator& maker_it() {
+        order_iterator_t& maker_it() {
             ASSERT(_can_match);
-            return *_maker_it;
+            return *_maker_itr;
         }
-        order_iterator& taker_it() {
+        order_iterator_t& taker_it() {
             ASSERT(_can_match);
-            return *_taker_it;
+            return *_taker_itr;
         }
 
         void calc_matched_amounts(asset &matched_assets, asset &matched_coins) {
             const auto &asset_symbol = _sym_pair.asset_symbol.get_symbol();
             const auto &coin_symbol = _sym_pair.coin_symbol.get_symbol();
-            ASSERT( _maker_it->stored_order().price.amount > 0);
+            ASSERT( _maker_itr->stored_order().price.amount > 0);
 
-            const auto &matched_price = _maker_it->stored_order().price;
+            const auto &matched_price = _maker_itr->stored_order().price;
 
-            auto maker_free_assets = _maker_it->get_free_limit_quant();
+            auto maker_free_assets = _maker_itr->get_free_limit_quant();
             ASSERT(maker_free_assets.symbol == asset_symbol);
             CHECK(maker_free_assets.amount > 0, "MUST: maker_free_assets > 0");
 
             asset taker_free_assets;
-    
-            taker_free_assets = _taker_it->get_free_limit_quant();
+
+            taker_free_assets = _taker_itr->get_free_limit_quant();
             ASSERT(taker_free_assets.symbol == asset_symbol);
             CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
-        
+
             matched_assets = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
             matched_coins = calc_coin_quant(matched_assets, matched_price, coin_symbol);
         }
@@ -244,32 +277,32 @@ namespace dex {
     private:
         const dex::symbol_pair_t &_sym_pair;
 
-        order_iterator limit_buy_it;
-        order_iterator limit_sell_it;
-        order_iterator *_taker_it = nullptr;
-        order_iterator *_maker_it = nullptr;
-        table_t&        _order_buy_tbl;
-        table_t&        _order_sell_tbl;
-        match_index_t&  _buy_price_idx;
-        match_index_t&  _sell_price_idx;
+        order_iterator_ptr _buy_itr;
+        order_iterator_ptr _sell_itr;
+        order_iterator_ptr _taker_itr = nullptr;
+        order_iterator_ptr _maker_itr = nullptr;
+        // table_t&            _order_buy_tbl;
+        // table_t&            _order_sell_tbl;
+        // match_index_t&  _buy_price_idx;
+        // match_index_t&  _sell_price_idx;
 
         bool _can_match = false;
 
         void process_data() {
-            _taker_it = nullptr;
-            _maker_it = nullptr;
+            _taker_itr = nullptr;
+            _maker_itr = nullptr;
             _can_match = false;
-    
+
             if (!_can_match) {
                 _can_match = true;
-                if ( limit_buy_it.is_valid() && limit_sell_it.is_valid() &&
-                     limit_buy_it.stored_order().price >= limit_sell_it.stored_order().price ) {
-                    if ( limit_buy_it.stored_order().order_id > limit_sell_it.stored_order().order_id ) {
-                        _taker_it = &limit_buy_it;
-                        _maker_it = &limit_sell_it;
+                if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
+                     _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
+                    if ( _buy_itr->stored_order().order_id > _sell_itr->stored_order().order_id ) {
+                        _taker_itr = _buy_itr;
+                        _maker_itr = _sell_itr;
                     } else {
-                        _taker_it = &limit_sell_it;
-                        _maker_it = &limit_buy_it;
+                        _taker_itr = _sell_itr;
+                        _maker_itr = _buy_itr;
                     }
                 } else {
                     _can_match = false;
@@ -277,9 +310,24 @@ namespace dex {
             }
 
             if (!_can_match) {
-                _taker_it = nullptr;
+                _taker_itr = nullptr;
             }
         }
     };
+
+    template<typename table_t, typename index_t>
+    inline auto make_table_index_iterator(std::shared_ptr<table_t> tbl, std::shared_ptr<index_t> idx, typename index_t::const_iterator itr) {
+        return std::make_shared<table_index_iterator<table_t, index_t>>(tbl, idx, itr);
+    }
+
+    inline auto make_order_iterator(const name contract, const dex::symbol_pair_t &sym_pair, const order_side_t &side) {
+
+        auto tbl = std::make_shared<order_tbl>(make_order_table( contract, sym_pair.sympair_id, side ));
+
+        auto idx_obj = tbl->get_index<"orderprice"_n>();
+        auto idx  = std::make_shared<decltype(idx_obj)>(idx_obj);
+        auto itr = make_table_index_iterator(tbl, idx, idx->begin());
+        return std::make_shared<matching_order_iterator<order_tbl, decltype(idx_obj)>>(itr, sym_pair.sympair_id, side);
+    }
 
 }// namespace dex
