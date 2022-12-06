@@ -142,7 +142,7 @@ private:
     bool check_dex_enabled();
 
     //Send deal action
-    void _send_deal_action( const dex::deal_item_t& deal_item );
+    void _send_deal_action( const std::list<dex::deal_item_t>& deal_items );
 
     dex::config_table _conf_tbl;
     dex::config _config;

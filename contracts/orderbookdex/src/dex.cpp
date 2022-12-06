@@ -214,7 +214,6 @@ void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32
     CHECK(is_account(matcher), "The matcher account does not exist");
     CHECK(max_count > 0, "The max_count must > 0")
 
-    std::list<symbol_pair_t> sym_pair_list;
     auto sympair_tbl = dex::make_sympair_table(get_self());
    
     auto sym_pair_it = sympair_tbl.find(sympair_id);
@@ -236,6 +235,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
     );
 
     asset latest_deal_price;
+    std::list<deal_item_t> items;
     while (matched_count < max_count && matching_pair_it.can_match()) {
 
         auto &maker_it = matching_pair_it.maker_it();
@@ -317,7 +317,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         deal_item.buy_refund_coins = buy_refund_coins;
         deal_item.memo          = memo;
         deal_item.deal_time     = cur_block_time;
-        _send_deal_action(deal_item);
+        items.push_back(deal_item);
 
         matched_count++;
 
@@ -333,6 +333,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         matching_pair_it.complete_and_next();
 
     }
+    _send_deal_action(items);
+
 
     matching_pair_it.save_matching_order();
 
@@ -340,8 +342,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
 }
 
-void dex_contract::_send_deal_action( const dex::deal_item_t& deal_item ) {
-    TRACE_L("The matched deal_item=", deal_item);
+void dex_contract::_send_deal_action( const std::list<dex::deal_item_t>& deal_items ) {
+    // TRACE_L("The matched deal_item=", deal_items);
     //TODO send deal action
 }
 
