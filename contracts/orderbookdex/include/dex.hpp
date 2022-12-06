@@ -70,7 +70,7 @@ public:
      *  @param max_count the max count of match item
      *  @param sym_pairs the symol pairs to match. is empty, match all
      */
-    ACTION match(const name &matcher, uint32_t max_count, const string &memo);
+    ACTION match(const name &matcher, const uint64_t& pair_id, uint32_t max_count, const string &memo);
 
     ACTION cancel(const uint64_t& pair_id, const name& side, const uint64_t &order_id);
 

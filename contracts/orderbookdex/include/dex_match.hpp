@@ -54,8 +54,6 @@ namespace dex {
         return calc_match_fee(ratio, quant);
     }
 
-
-
     template<typename table_t, typename index_t>
     class table_index_iterator {
     public:
@@ -82,24 +80,12 @@ namespace dex {
         matching_order_iterator(table_index_iterator_ptr idx_itr, uint64_t sympair_id, order_side_t side)
             : _idx_itr(idx_itr), _sym_pair_id(sympair_id), _order_side(side)
         {
-            // _it             = _price_idx.begin();
-            // TRACE("creating matching order itr! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
             process_data();
         };
 
         void complete_and_next() {
-            // ASSERT(is_completed()); TODO
-            // const auto &store_order = *_it;
-            // _idx_itr->itr++;
             ASSERT(_idx_itr->is_valid());
             _idx_itr->itr = _idx_itr->idx->erase(_idx_itr->itr);
-            // table.modify(store_order, same_payer, [&]( auto& a ) {
-            //     a.matched_assets = _matched_assets;
-            //     a.matched_coins = _matched_coins;
-            //     a.matched_fee = _matched_fee;
-            //     a.last_updated_at = current_block_time();
-            //     a.last_deal_id = _last_deal_id;
-            // });
             process_data();
         }
 
@@ -214,14 +200,6 @@ namespace dex {
 
         matching_pair_iterator(const dex::symbol_pair_t& sym_pair, order_iterator_ptr buy_itr, order_iterator_ptr sell_itr )
             : _sym_pair(sym_pair), _buy_itr(buy_itr), _sell_itr(sell_itr)  {
-            // _order_buy_tbl  = make_order_table( contract, sym_pair.sympair_id, side );
-            // _order_sell_tbl = make_order_table( contract, sym_pair.sympair_id, side )
-
-            // auto buy_price_idx  = _order_buy_tbl.get_index<"orderprice"_n>();
-            // auto _sell_price_idx = _order_sell_tbl.get_index<"orderprice"_n>();
-
-            // _buy_itr(_order_buy_tbl, buy_price_idx, sym_pair.sympair_id, order_side::BUY),
-            // _sell_itr(_order_sell_tbl, _sell_price_idx, sym_pair.sympair_id, order_side::SELL),
             process_data();
         }
 

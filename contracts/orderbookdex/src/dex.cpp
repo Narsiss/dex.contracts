@@ -208,53 +208,27 @@ dex::config dex_contract::get_default_config() {
     };
 }
 
-void dex_contract::match(const name &matcher, uint32_t max_count, const string &memo) {
+void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32_t max_count, const string &memo) {
     CHECK_DEX_ENABLED()
 
     CHECK(is_account(matcher), "The matcher account does not exist");
     CHECK(max_count > 0, "The max_count must > 0")
 
-    auto sym_pairs = _global->matching_sympair;
     std::list<symbol_pair_t> sym_pair_list;
     auto sympair_tbl = dex::make_sympair_table(get_self());
-    if (!sym_pairs.empty()) {
-        for (auto sympair_id : sym_pairs) {
-            auto it = sympair_tbl.find(sympair_id);
-            CHECK(it != sympair_tbl.end(), "The symbol pair=" + std::to_string(sympair_id) + " does not exist");
-            CHECK(it->enabled, "The indicated sym_pair=" + std::to_string(sympair_id) + " is disabled");
-            sym_pair_list.push_back(*it);
-        }
-    } else {
-        auto sym_pair_it = sympair_tbl.begin();
-        for (; sym_pair_it != sympair_tbl.end(); sym_pair_it++) {
-            if (sym_pair_it->enabled) {
-                sym_pair_list.push_back(*sym_pair_it);
-            }
-        }
-    }
+   
+    auto sym_pair_it = sympair_tbl.find(sympair_id);
+    CHECK(sym_pair_it != sympair_tbl.end(), "The symbol pair=" + std::to_string(sympair_id) + " does not exist");
+    CHECK(sym_pair_it->enabled, "The indicated sym_pair=" + std::to_string(sympair_id) + " is disabled");
 
     uint32_t matched_count = 0;
-    for (const auto &sym_pair : sym_pair_list) {
-        if (matched_count >= DEX_MATCH_COUNT_MAX) break;
-        match_sympair(matcher, sym_pair, max_count, matched_count, memo);
-    }
-
+    match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
     CHECK(matched_count > 0, "None matched");
 }
 
 void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
                                   uint32_t max_count, uint32_t &matched_count, const string &memo) {
     auto cur_block_time     = current_block_time();
-    // auto buy_order_tbl      = make_order_table(get_self(), sym_pair.sympair_id, dex::order_side::BUY );
-    // auto sell_order_tbl     = make_order_table(get_self(), sym_pair.sympair_id, dex::order_side::SELL );
-    // auto buy_match_index    = buy_order_tbl.get_index<"orderprice"_n>();
-    // auto sell_match_index   = sell_order_tbl.get_index<"orderprice"_n>();
-
-    // auto matching_pair_it = dex::matching_pair_iterator(get_self(), sym_pair);
-    // auto matching_pair_it = dex::matching_pair_iterator(
-    //     dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY),
-    //     dex::make_order_iterator(get_self(), sym_pair, dex::order_side::SELL),
-    // );
 
     auto matching_pair_it = dex::matching_pair_iterator( sym_pair,
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY),
@@ -364,33 +338,6 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
     if (latest_deal_price.amount > 0)
         update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
-
-    if (matching_pair_it.can_match()){
-        if(!_global->matching_sympair.count(sym_pair.sympair_id)){
-            _global->matching_sympair.insert(sym_pair.sympair_id);
-        }
-    }
-    else {
-        if(_global->matching_sympair.count(sym_pair.sympair_id))
-            _global->matching_sympair.erase(sym_pair.sympair_id);
-    }
-    if (_global->matching_sympair.size() > 0 && !_global->matching_sent){
-        _global->matching_sent = true;
-
-        transaction trx{};
-        trx.actions.emplace_back(
-            permission_level(get_self(), "active"_n),
-            get_self(),
-            "match"_n,
-            std::make_tuple(get_self(), _config.max_match_count, "deferred"));
-        trx.delay_sec = _config.deferred_matching_secs;
-        auto trx_data = pack(trx);
-        send_deferred( (uint64_t(current_time_point().sec_since_epoch()) << 32) | sym_pair.sympair_id,
-            get_self(), trx_data.data(), trx_data.size());
-    }
-    if (_global->matching_sympair.size() == 0) {
-        _global->matching_sent = false;
-    }
 }
 
 void dex_contract::_send_deal_action( const dex::deal_item_t& deal_item ) {

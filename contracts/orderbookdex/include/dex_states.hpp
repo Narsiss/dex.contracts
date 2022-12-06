@@ -103,8 +103,6 @@ namespace dex {
         uint64_t        queue_order_id      = 0;        // the auto-increament id of order
         uint64_t        sympair_id          = 0;         // the auto-increament id of symbol pair
         uint64_t        deal_item_id        = 0;       // the auto-increament id of deal item
-        set<uint64_t>   matching_sympair;       // deferred send action to match
-        bool            matching_sent       = false;  // deferred send action to match
     };
 
     typedef eosio::singleton< "global"_n, global > global_table;
