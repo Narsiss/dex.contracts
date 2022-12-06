@@ -258,7 +258,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
     auto matching_pair_it = dex::matching_pair_iterator( sym_pair,
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY),
-        dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY)
+        dex::make_order_iterator(get_self(), sym_pair, dex::order_side::SELL)
     );
 
     asset latest_deal_price;
