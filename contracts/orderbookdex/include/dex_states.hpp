@@ -18,6 +18,7 @@ namespace dex {
     static constexpr eosio::name active_perm{"active"_n};
 
     typedef name order_side_t;
+    typedef name order_type_t;
 
     enum class err: uint8_t {
         NONE                 = 0,
@@ -49,6 +50,28 @@ namespace dex {
         static constexpr name orderrefund   = "orderrefund"_n;
         static constexpr name parentreward  = "parentreward"_n;
         static constexpr name grandreward   = "grandreward"_n;
+    }
+
+    namespace order_type {
+        static const order_type_t NONE = order_type_t();
+        static const order_type_t LIMIT = "limit"_n;
+        static const order_type_t MARKET = "market"_n;
+        // order_type_t -> index
+        static const std::map<order_type_t, uint8_t> ENUM_MAP = {
+            {LIMIT, 1},
+            {MARKET, 2}
+        };
+
+        inline bool is_valid(const order_type_t &value) {
+            return ENUM_MAP.count(value);
+        }
+
+        inline uint8_t index(const order_type_t &value) {
+                if (value == NONE) return 0;
+                auto it = ENUM_MAP.find(value);
+                CHECK(it != ENUM_MAP.end(), "Invalid order_type=" + value.to_string());
+                return it->second;
+        }
     }
 
     namespace order_side {
@@ -220,6 +243,7 @@ namespace dex {
         name            owner;
         uint64_t        sympair_id;         // id of symbol_pair_table
         order_side_t    order_side;
+        order_type_t    order_type;
         asset           price;
         asset           limit_quant;
         asset           frozen_quant;
@@ -253,6 +277,7 @@ namespace dex {
                 PP(owner),
                 PP0(sympair_id),
                 PP(order_side),
+                PP(order_type),
                 PP(price),
                 PP(limit_quant),
                 PP(frozen_quant),

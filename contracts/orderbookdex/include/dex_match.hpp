@@ -3,7 +3,11 @@
 #include "dex_states.hpp"
 #include <utils.hpp>
 
+
+#define ORDER_SN(orderId) orderId&0xFFFFFF
+
 namespace dex {
+
 
     inline int64_t power(int64_t base, int64_t exp) {
         int64_t ret = 1;
@@ -109,8 +113,6 @@ namespace dex {
                     const asset &new_matched_coins,
                     const asset &new_matched_fee) {
 
-            bool completed = false;
-
             _last_deal_id   = deal_id;
             _matched_assets += new_matched_assets;
             _matched_coins  += new_matched_coins;
@@ -120,7 +122,7 @@ namespace dex {
             CHECK(_matched_assets <= order.limit_quant,
                 "The matched assets=" + _matched_assets.to_string() +
                 " is overflow with limit_quant=" + order.limit_quant.to_string());
-            completed = _matched_assets == order.limit_quant;
+            _complete = _matched_assets == order.limit_quant;
 
             if (order.order_side == order_side::BUY) {
                 auto total_matched_coins = (_matched_coins.symbol == _matched_fee.symbol) ?
@@ -129,7 +131,7 @@ namespace dex {
                 CHECK(total_matched_coins <= order.frozen_quant,
                         "The total_matched_coins=" + _matched_coins.to_string() +
                         " is overflow with frozen_quant=" + order.frozen_quant.to_string() + " for buy order");
-                if (completed) {
+                if (_complete) {
                     if (order.frozen_quant > total_matched_coins) {
                         _refund_coins = order.frozen_quant - total_matched_coins;
                     }
@@ -159,7 +161,7 @@ namespace dex {
         }
 
         inline bool is_completed() const {
-            return false; // TODO: ...
+            return _complete; 
         }
 
     private:
@@ -177,11 +179,9 @@ namespace dex {
             _matched_coins  = stored_order.matched_coins;
             _matched_fee    = stored_order.matched_fee;
             _refund_coins   = asset(0, _matched_coins.symbol);
+            _complete       = false;
         }
 
-        // table_t&                _order_tbl;
-        // price_index_t&          _price_idx;
-        // typename price_index_t::const_iterator _it;
         table_index_iterator_ptr    _idx_itr;
         uint64_t                    _sym_pair_id;
         order_side_t                _order_side;
@@ -191,6 +191,7 @@ namespace dex {
         asset                       _matched_coins;       //!< total matched coin amount
         asset                       _matched_fee;        //!< total matched fees
         asset                       _refund_coins;
+        bool                        _complete;
     };
 
     template<typename order_iterator_t>
@@ -275,7 +276,7 @@ namespace dex {
                 _can_match = true;
                 if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
                      _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
-                    if ( _buy_itr->stored_order().order_id > _sell_itr->stored_order().order_id ) {
+                    if ( ORDER_SN(_buy_itr->stored_order().order_id) > ORDER_SN(_sell_itr->stored_order().order_id) ) {
                         _taker_itr = _buy_itr;
                         _maker_itr = _sell_itr;
                     } else {

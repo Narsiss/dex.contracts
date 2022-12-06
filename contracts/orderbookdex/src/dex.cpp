@@ -5,6 +5,13 @@
 #include <eosio/transaction.hpp>
 #include <eosio/permission.hpp>
 
+static constexpr eosio::name active_permission{"active"_n};
+
+
+#define ADD_ACTION( items, curr) \
+     { dex_contract::deal_action act{ _self, { {_self, active_permission} } };\
+	        act.send( items, curr );}
+
 using namespace eosio;
 using namespace std;
 using namespace dex;
@@ -333,8 +340,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         matching_pair_it.complete_and_next();
 
     }
-    _send_deal_action(items);
-
+    ADD_ACTION( items, time_point_sec(current_time_point()) );
 
     matching_pair_it.save_matching_order();
 
@@ -342,9 +348,10 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
 }
 
-void dex_contract::_send_deal_action( const std::list<dex::deal_item_t>& deal_items ) {
-    // TRACE_L("The matched deal_item=", deal_items);
-    //TODO send deal action
+
+void dex_contract::adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts ) {
+    require_auth(get_self());
+    require_recipient(get_self());
 }
 
 void dex_contract::_allot_fee(const name &from_user, const name& bank, const asset& fee, const uint64_t order_id){
@@ -417,8 +424,8 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
     CHECK( sym_pair_it != sympair_tbl.end(), "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
     CHECK( sym_pair_it->enabled, "The symbol pair '" + std::to_string(sympair_id) + " is disabled")
 
-    const auto &asset_symbol = sym_pair_it->asset_symbol.get_symbol();
-    const auto &coin_symbol = sym_pair_it->coin_symbol.get_symbol();
+    const auto &asset_symbol    = sym_pair_it->asset_symbol.get_symbol();
+    const auto &coin_symbol     = sym_pair_it->coin_symbol.get_symbol();
 
     auto taker_fee_ratio = _config.taker_fee_ratio;
     auto maker_fee_ratio = _config.maker_fee_ratio;
@@ -458,30 +465,30 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
     const auto &fee_symbol = (order_side == dex::order_side::BUY && !sym_pair_it->only_accept_coin_fee) ?
             asset_symbol : coin_symbol;
 
-    auto queue_tbl = make_queue_table(get_self());
-    auto acct_idx = queue_tbl.get_index<"orderowner"_n>();
+    auto queue_tbl      = make_queue_table(get_self());
+    auto acct_idx       = queue_tbl.get_index<"orderowner"_n>();
 
     CHECK( acct_idx.find(user.value) == acct_idx.end(), "The user exists: user=" + user.to_string());
 
     auto cur_block_time = current_block_time();
-    auto order_id = _global->new_queue_order_id();
+    auto order_id       = _global->new_queue_order_id();
     queue_tbl.emplace(get_self(), [&](auto &order) {
-        order.order_id = order_id;
-        order.external_id = external_id;
-        order.owner = user;
-        order.sympair_id = sympair_id;
-        order.order_side = order_side;
-        order.price = price ? *price : asset(0, coin_symbol);
-        order.limit_quant = limit_quant;
-        order.frozen_quant = frozen_quant;
-        order.taker_fee_ratio = taker_fee_ratio;
-        order.maker_fee_ratio = maker_fee_ratio;
-        order.matched_assets = asset(0, asset_symbol);
-        order.matched_coins = asset(0, coin_symbol);
-        order.matched_fee = asset(0, fee_symbol);
-        order.created_at = cur_block_time;
-        order.last_updated_at = cur_block_time;
-        order.last_deal_id = 0;
+        order.order_id          = order_id;
+        order.external_id       = external_id;
+        order.owner             = user;
+        order.sympair_id        = sympair_id;
+        order.order_side        = order_side;
+        order.price             = price ? *price : asset(0, coin_symbol);
+        order.limit_quant       = limit_quant;
+        order.frozen_quant      = frozen_quant;
+        order.taker_fee_ratio   = taker_fee_ratio;
+        order.maker_fee_ratio   = maker_fee_ratio;
+        order.matched_assets    = asset(0, asset_symbol);
+        order.matched_coins     = asset(0, coin_symbol);
+        order.matched_fee       = asset(0, fee_symbol);
+        order.created_at        = cur_block_time;
+        order.last_updated_at   = cur_block_time;
+        order.last_deal_id      = 0;
     });
 }
 

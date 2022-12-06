@@ -76,12 +76,17 @@ public:
 
     ACTION cleandata(const uint64_t &max_count);
 
+    ACTION adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts );
+
     // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
     using neworder_action   = action_wrapper<"neworder"_n,  &dex_contract::neworder>;
     using buy_action        = action_wrapper<"buy"_n,       &dex_contract::buy>;
     using sell_action       = action_wrapper<"sell"_n,      &dex_contract::sell>;
     using match_action      = action_wrapper<"match"_n,     &dex_contract::match>;
     using cancel_action     = action_wrapper<"cancel"_n,    &dex_contract::cancel>;
+
+    using deal_action       = action_wrapper<"adddexdeal"_n, &dex_contract::adddexdeal>;
+
 
 public:
     std::string to_hex(const char* d, uint32_t s){
@@ -140,9 +145,6 @@ private:
     bool check_data_outdated(const time_point &data_time, const time_point &now);
 
     bool check_dex_enabled();
-
-    //Send deal action
-    void _send_deal_action( const std::list<dex::deal_item_t>& deal_items );
 
     dex::config_table _conf_tbl;
     dex::config _config;
