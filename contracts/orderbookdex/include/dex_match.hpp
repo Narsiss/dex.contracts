@@ -233,13 +233,13 @@ namespace dex {
         }
 
         void calc_matched_amounts(asset &matched_assets, asset &matched_coins) {
-            const auto &asset_symbol = _sym_pair.asset_symbol.get_symbol();
-            const auto &coin_symbol = _sym_pair.coin_symbol.get_symbol();
+            const auto &asset_symbol    = _sym_pair.asset_symbol.get_symbol();
+            const auto &coin_symbol     = _sym_pair.coin_symbol.get_symbol();
             ASSERT( _maker_itr->stored_order().price.amount > 0);
 
-            const auto &matched_price = _maker_itr->stored_order().price;
+            const auto &matched_price   = _maker_itr->stored_order().price;
+            auto maker_free_assets      = _maker_itr->get_free_limit_quant();
 
-            auto maker_free_assets = _maker_itr->get_free_limit_quant();
             ASSERT(maker_free_assets.symbol == asset_symbol);
             CHECK(maker_free_assets.amount > 0, "MUST: maker_free_assets > 0");
 
@@ -260,11 +260,6 @@ namespace dex {
         order_iterator_ptr _sell_itr;
         order_iterator_ptr _taker_itr = nullptr;
         order_iterator_ptr _maker_itr = nullptr;
-        // table_t&            _order_buy_tbl;
-        // table_t&            _order_sell_tbl;
-        // match_index_t&  _buy_price_idx;
-        // match_index_t&  _sell_price_idx;
-
         bool _can_match = false;
 
         void process_data() {
@@ -295,11 +290,15 @@ namespace dex {
     };
 
     template<typename table_t, typename index_t>
-    inline auto make_table_index_iterator(std::shared_ptr<table_t> tbl, std::shared_ptr<index_t> idx, typename index_t::const_iterator itr) {
+    inline auto make_table_index_iterator(std::shared_ptr<table_t> tbl, 
+                                            std::shared_ptr<index_t> idx, 
+                                            typename index_t::const_iterator itr) {
         return std::make_shared<table_index_iterator<table_t, index_t>>(tbl, idx, itr);
     }
 
-    inline auto make_order_iterator(const name contract, const dex::symbol_pair_t &sym_pair, const order_side_t &side) {
+    inline auto make_order_iterator(const name contract,
+                                    const dex::symbol_pair_t &sym_pair, 
+                                    const order_side_t &side) {
 
         auto tbl = std::make_shared<order_tbl>(make_order_table( contract, sym_pair.sympair_id, side ));
 
