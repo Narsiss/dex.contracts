@@ -142,7 +142,6 @@ private:
 
     void add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo);
 
-    bool check_data_outdated(const time_point &data_time, const time_point &now);
 
     bool check_dex_enabled();
 

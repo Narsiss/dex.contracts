@@ -107,9 +107,7 @@ namespace dex {
         int64_t     maker_fee_ratio;
         int64_t     taker_fee_ratio;
         uint32_t    max_match_count;        // the max match count for creating new order,  if 0 will forbid match
-        bool        admin_sign_required;   // check the order must have the authorization by dex admin
-        int64_t     data_recycle_sec;       // old data: canceled orders, deal items and related completed orders
-        int8_t      deferred_matching_secs; // will auto matching after seconds for hudge order
+        bool        admin_sign_required;    // check the order must have the authorization by dex admin
 
         set<extended_symbol> support_quote_symbols;
         uint64_t    parent_reward_ratio;

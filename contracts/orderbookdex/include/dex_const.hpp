@@ -10,7 +10,6 @@ constexpr int64_t FEE_RATIO_MAX             = 4999;      // 49.99%, max fee rati
 constexpr int64_t DEX_MAKER_FEE_RATIO       = 4;         // 0.04%, dex maker fee ratio
 constexpr int64_t DEX_TAKER_FEE_RATIO       = 8;         // 0.04%, dex taker fee ratio
 constexpr uint32_t DEX_MATCH_COUNT_MAX      = 50;         // the max dex match count.
-constexpr uint64_t DATA_RECYCLE_SEC         = 90 * 3600 * 24; // recycle time: 90 days, in seconds
 
 constexpr int64_t MEMO_LEN_MAX              = 255;        // 0.001%, max memo length
 constexpr int64_t URL_LEN_MAX               = 255;        // 0.001%, max url length
