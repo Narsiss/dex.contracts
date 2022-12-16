@@ -88,6 +88,7 @@ namespace dex {
         };
 
         void complete_and_next() {
+            print("complete_and_next");
             ASSERT(_idx_itr->is_valid());
             _idx_itr->itr = _idx_itr->idx->erase(_idx_itr->itr);
             process_data();
@@ -157,7 +158,7 @@ namespace dex {
         }
 
         inline bool is_valid() const {
-            return _idx_itr->is_valid();
+            return _idx_itr && _idx_itr->is_valid();
         }
 
         inline bool is_completed() const {

@@ -35,6 +35,8 @@ public:
 
     ACTION onoffsympair(const uint64_t& sympair_id, const bool& on_off);
 
+    ACTION delsympair(const uint64_t& sympair_id);
+
     [[eosio::on_notify("*::transfer")]] 
     void ontransfer(const name& from, const name& to, const asset& quant, const string& memo);
 

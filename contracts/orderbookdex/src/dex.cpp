@@ -123,6 +123,16 @@ void dex_contract::onoffsympair(const uint64_t& sympair_id, const bool& on_off) 
     });
 }
 
+void dex_contract::delsympair(const uint64_t& sympair_id) {
+    require_auth( _config.dex_admin );
+
+    auto sympair_tbl = make_sympair_table(_self);
+    auto it = sympair_tbl.find(sympair_id);
+    CHECKC( it != sympair_tbl.end(),            err::RECORD_NOT_FOUND, "sympair not found: " + to_string(sympair_id) )
+    sympair_tbl.erase(it);
+}
+
+
 void dex_contract::ontransfer(const name& from, const name& to, const asset& quant, const string& memo) {
     CHECK_DEX_ENABLED()
     if (from == get_self()) { return; }
@@ -160,9 +170,13 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
         order_info.order_id = order_id;
     });
     queue_owner_idx.erase(order_itr);
+    
+    TRACE_L( "match_sympair begin  ", _config.max_match_count);
 
     if (_config.max_match_count > 0) {
         uint32_t matched_count = 0;
+        TRACE_L( "match_sympair check max_match_count ", _config.max_match_count);
+        
         match_sympair(get_self(), *sym_pair_it, _config.max_match_count, matched_count, "oid:" + std::to_string(order_id));
     }
 }
@@ -224,19 +238,20 @@ void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32
     CHECKC(sym_pair_it->enabled,                err::STATUS_ERROR, "The indicated sym_pair=" + std::to_string(sympair_id) + " is disabled");
 
     uint32_t matched_count = 0;
-    match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
+    // match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
     CHECKC(matched_count > 0,  err::PARAM_ERROR, "None matched");
 }
 
 void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
                                   uint32_t max_count, uint32_t &matched_count, const string &memo) {
     auto cur_block_time     = current_block_time();
-
+    TRACE_L( "match_sympair matching_pair_iterator enter ");
     auto matching_pair_it = dex::matching_pair_iterator( sym_pair,
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY),
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::SELL)
     );
-
+    TRACE_L("match_sympair matching_pair_iterator ");
+    
     asset latest_deal_price;
     std::list<deal_item_t> items;
     while (matched_count < max_count && matching_pair_it.can_match()) {
@@ -418,7 +433,7 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
     auto sympair_tbl = make_sympair_table(get_self());
     auto sym_pair_it = sympair_tbl.find(sympair_id);
     CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
-    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair '" + std::to_string(sympair_id) + " is disabled")
+    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + std::to_string(sympair_id) + "] is disabled")
 
     const auto &asset_symbol    = sym_pair_it->asset_symbol.get_symbol();
     const auto &coin_symbol     = sym_pair_it->coin_symbol.get_symbol();
