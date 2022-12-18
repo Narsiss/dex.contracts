@@ -262,8 +262,7 @@ namespace dex {
         uint64_t by_owner()const        { return owner.value; }
         uint64_t by_external_id()const  { return external_id; }
         uint64_t get_price()const       { 
-            return order_side == order_side::BUY ? price.amount : 
-                                std::numeric_limits<uint64_t>::max() - price.amount;
+            return order_side == order_side::BUY ? (std::numeric_limits<uint64_t>::max() - price.amount): price.amount;
          }
 
         order_price_idx_key get_order_price_idx()const { 
@@ -308,11 +307,13 @@ namespace dex {
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
  
 
-    struct deal_item_t {
+    struct DEX_TABLE deal_item_t {
         uint64_t    id;
         uint64_t    sympair_id;
         uint64_t    buy_order_id;
+        uint64_t    buy_order_sn;
         uint64_t    sell_order_id;
+        uint64_t    sell_order_sn;
         asset       deal_assets;
         asset       deal_coins;
         asset       deal_price;
@@ -329,7 +330,9 @@ namespace dex {
                 PP0(id),
                 PP(sympair_id),
                 PP(buy_order_id),
+                PP(buy_order_sn),
                 PP(sell_order_id),
+                PP(sell_order_sn),
                 PP(deal_assets),
                 PP(deal_coins),
                 PP(deal_price),
@@ -341,7 +344,10 @@ namespace dex {
                 PP(deal_time)
             );
         }
+        uint64_t primary_key() const    { return id; }
     };
+
+    typedef eosio::multi_index<"deals"_n, deal_item_t> deal_tbl;
 
     struct DEX_TABLE rewards_t
     {

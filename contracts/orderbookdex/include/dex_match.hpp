@@ -8,7 +8,6 @@
 
 namespace dex {
 
-
     inline int64_t power(int64_t base, int64_t exp) {
         int64_t ret = 1;
         while( exp > 0  ) {
@@ -284,7 +283,10 @@ namespace dex {
             _can_match = false;
 
             if (!_can_match) {
+                TRACE_L("_can_match begin");
                 _can_match = true;
+                TRACE_L("_can_match: ", _buy_itr->is_valid(), _sell_itr->is_valid(),", buy:", _buy_itr->stored_order().order_sn, "  ",
+                                         _buy_itr->stored_order().price,", sell:", _buy_itr->stored_order().order_sn, "  ", _sell_itr->stored_order().price);
                 if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
                      _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
                     if ( _buy_itr->stored_order().order_sn > _sell_itr->stored_order().order_sn ) {
@@ -294,8 +296,11 @@ namespace dex {
                         _taker_itr = _sell_itr;
                         _maker_itr = _buy_itr;
                     }
+
+                    TRACE_L("_can_match end, true");
                 } else {
                     _can_match = false;
+                    TRACE_L("_can_match end, false");
                 }
             }
 

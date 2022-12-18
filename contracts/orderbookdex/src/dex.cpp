@@ -329,7 +329,9 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         deal_item.id            = deal_id;
         deal_item.sympair_id    = sym_pair.sympair_id;        
         deal_item.buy_order_id  = buy_order.order_id;
+        deal_item.buy_order_sn  = buy_order.order_sn;
         deal_item.sell_order_id = sell_order.order_id;
+        deal_item.sell_order_sn = sell_order.order_sn;
         deal_item.deal_assets   = matched_assets;
         deal_item.deal_coins    = matched_coins;
         deal_item.deal_price    = matched_price;
@@ -340,6 +342,11 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         deal_item.memo          = memo;
         deal_item.deal_time     = cur_block_time;
         items.push_back(deal_item);
+        
+        deal_tbl deals(_self, _self.value);
+        deals.emplace(_self, [&](auto& row) {
+            row = deal_item;
+        });
 
         matched_count++;
 
@@ -429,7 +436,6 @@ void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
     // frozen_quant not in use
     new_order(user, sympair_id, order_side, limit_quant, price, external_id, order_config_ex);
 }
-
 
 /**
  * create order to queue
