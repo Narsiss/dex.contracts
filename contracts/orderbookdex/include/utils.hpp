@@ -21,7 +21,7 @@ using namespace std;
 #endif
 
 #ifndef TRACE
-    #define TRACE(...) print("---TRACE---", __VA_ARGS__)
+    #define TRACE(...) print("---TRACE---[",__FILE__,"] [ ", __LINE__,"] [", __func__, "] ", __VA_ARGS__)
 #endif
 
 #define TRACE_L(...) TRACE(__VA_ARGS__, "\n")

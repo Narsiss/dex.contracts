@@ -88,21 +88,23 @@ namespace dex {
         };
 
         void complete_and_next() {
-            print("complete_and_next");
+            TRACE_L("matching_order_iterator::complete_and_next");
             ASSERT(_idx_itr->is_valid());
             _idx_itr->itr = _idx_itr->idx->erase(_idx_itr->itr);
             process_data();
         }
 
         void save_matching_order() {        //TODO check matching status
-            ASSERT(_idx_itr->is_valid());
-            _idx_itr->idx->modify(_idx_itr->itr, same_payer, [&]( auto& a ) {
-                a.matched_assets = _matched_assets;
-                a.matched_coins = _matched_coins;
-                a.matched_fee = _matched_fee;
-                a.last_updated_at = current_block_time();
-                a.last_deal_id = _last_deal_id;
-            });
+            TRACE_L("matching_order_iterator::save_matching_order");
+            if(_idx_itr && _idx_itr->is_valid() ) {
+                _idx_itr->idx->modify(_idx_itr->itr, same_payer, [&]( auto& a ) {
+                    a.matched_assets = _matched_assets;
+                    a.matched_coins = _matched_coins;
+                    a.matched_fee = _matched_fee;
+                    a.last_updated_at = current_block_time();
+                    a.last_deal_id = _last_deal_id;
+                });
+            }
         }
 
         inline const order_t &stored_order() {
@@ -142,6 +144,7 @@ namespace dex {
 
 
         inline asset get_free_limit_quant() const {
+            TRACE_L("get_free_limit_quant");
             ASSERT(_idx_itr->is_valid());
             asset ret = _idx_itr->itr->limit_quant - _matched_assets;
             ASSERT(ret.amount >= 0);
@@ -149,6 +152,8 @@ namespace dex {
         }
 
         inline asset get_refund_coins() const {
+            TRACE_L("get_refund_coins");
+
             ASSERT(_idx_itr->is_valid());
             return _refund_coins;
         }
@@ -158,6 +163,7 @@ namespace dex {
         }
 
         inline bool is_valid() const {
+            TRACE_L("is_valid():  _idx_itr && _idx_itr->is_valid() ");
             return _idx_itr && _idx_itr->is_valid();
         }
 
@@ -167,6 +173,8 @@ namespace dex {
 
     private:
         void process_data() {
+            TRACE_L("process_data");
+
             if (!_idx_itr->is_valid()) {
                 TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
                 return;
@@ -206,13 +214,20 @@ namespace dex {
         }
 
         void complete_and_next() {
+            TRACE_L("matching_pair_iterator::complete_and_next begin");
+            
+
             if (_taker_itr->is_completed()) {
                 _taker_itr->complete_and_next();
             }
             if (_maker_itr->is_completed()) {
                 _maker_itr->complete_and_next();
             }
+            TRACE_L("matching_pair_iterator::process_data begin");
+
             process_data();
+            TRACE_L("matching_pair_iterator::process_data end");
+            TRACE_L("matching_pair_iterator::complete_and_next end");
         }
 
         void save_matching_order() {
@@ -272,7 +287,7 @@ namespace dex {
                 _can_match = true;
                 if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
                      _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
-                    if ( ORDER_SN(_buy_itr->stored_order().order_id) > ORDER_SN(_sell_itr->stored_order().order_id) ) {
+                    if ( _buy_itr->stored_order().order_sn > _sell_itr->stored_order().order_sn ) {
                         _taker_itr = _buy_itr;
                         _maker_itr = _sell_itr;
                     } else {

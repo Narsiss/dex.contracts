@@ -160,14 +160,17 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     CHECKC( order_itr->frozen_quant == quant,       err::STATUS_ERROR, "require quantity is " + order_itr->frozen_quant.to_string() )
 
     auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_side );
-    auto order_id = _global->new_order_id(order_itr->sympair_id, order_itr->order_side);
+    TRACE_L ( "order_tbl, scpoe: ", ( order_itr->sympair_id << 8 | uint64_t(order_side::index(order_itr->order_side))));
+    auto order_sn = _global->new_order_sn();
+    auto order_id = _global->new_order_id(order_sn, order_itr->sympair_id, order_itr->order_side);
+    TRACE_L ( "order_tbl, order_id:", order_id);
 
     // auto _index=     order_tbl.get_index<"orderprice"_n>();
-
 
     order_tbl.emplace(_self, [&](auto &order_info) {
         order_info          = *order_itr;
         order_info.order_id = order_id;
+        order_info.order_sn = order_sn;
     });
     queue_owner_idx.erase(order_itr);
     
@@ -255,6 +258,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
     asset latest_deal_price;
     std::list<deal_item_t> items;
     while (matched_count < max_count && matching_pair_it.can_match()) {
+        TRACE_L("matched round begin count: " , matched_count);
 
         auto &maker_it = matching_pair_it.maker_it();
         auto &taker_it = matching_pair_it.taker_it();
@@ -323,7 +327,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         deal_item_t deal_item;
         deal_item.id            = deal_id;
-        deal_item.sympair_id    = sym_pair.sympair_id;
+        deal_item.sympair_id    = sym_pair.sympair_id;        
         deal_item.buy_order_id  = buy_order.order_id;
         deal_item.sell_order_id = sell_order.order_id;
         deal_item.deal_assets   = matched_assets;
@@ -347,13 +351,19 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
                     balance_type::orderrefund, " order_id: " + to_string(buy_order.order_id));
             }
         }
+        TRACE_L("match round end: " , matched_count);
 
         matching_pair_it.complete_and_next();
 
     }
+    TRACE_L("match finished: " , matched_count);
+
     ADD_ACTION( items, time_point_sec(current_time_point()) );
 
+    TRACE_L("save matching order begin");
+
     matching_pair_it.save_matching_order();
+    TRACE_L("save matching order end");
 
     if (latest_deal_price.amount > 0)
         update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
@@ -398,6 +408,9 @@ void dex_contract::_allot_fee(const name &from_user, const name& bank, const ass
 }
 
 void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price) {
+
+    TRACE_L("update_latest_deal_price begin");
+
     auto sympair_tbl = make_sympair_table(_self);
     auto it = sympair_tbl.find( sympair_id );
     CHECKC( it != sympair_tbl.end(), err::PARAM_ERROR, "Err: sympair not found" )
@@ -405,6 +418,7 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
     sympair_tbl.modify(*it, same_payer, [&](auto &row) {
         row.latest_deal_price = latest_deal_price;
     });
+    TRACE_L("update_latest_deal_price end");
 }
 
 void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
@@ -489,6 +503,7 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         order.owner             = user;
         order.sympair_id        = sympair_id;
         order.order_side        = order_side;
+        order.order_type    = order_type::LIMIT;
         order.price             = price ? *price : asset(0, coin_symbol);
         order.limit_quant       = limit_quant;
         order.frozen_quant      = frozen_quant;

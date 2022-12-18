@@ -36,70 +36,56 @@ class Test(unittest.TestCase):
         dex_path = "/Users/joslin/code/workspace/opensource/dex.contracts"
         init.build(dex_path)
         dex = init.ORDERBOOKDEX()
-        dex.init(suber=dex)
-        dex.get_config()
+        dex.init(dex)
+        dex.get_config(dex)
+        
         COMMENT('''
         finished
         ''')
-
+        
+        master = new_master_account()
+        amax_token  = init.deploy_amax()
+        amax_mtoken = init.deploy_mtoken()
+        farm = init.deploy_farm()
+        
+        COMMENT('''
+        Create test accounts:
+        ''')
+        
+        dexadmin = new_account(master,"dexadmin")
+        admin = new_account(master,"admin")
+        
+        dex.setsympair(["8,METH", "amax.mtoken"], ["6,MUSDT", "amax.mtoken"], "0.01000000 METH","1.000000 MUSDT", True, True, dexadmin )
+        dex.get_sympair(dex)
 
         
-        # master = new_master_account()
-        
-        # amax_token  = init.deploy_amax()
-        # amax_mtoken = init.deploy_mtoken()
-        
-        # COMMENT('''
-        # Create test accounts:
-        # ''')
-
-        # orderbookdex = new_account(master,"orderbookdex")
-        # dexadmin = new_account(master,"dexadmin")
-        
-        # # farm = init.deploy_farm()
-
-        # smart = Contract(orderbookdex, 
-        #         wasm_file=CUSTOMER_WASM_PATH + '/build/contracts/orderbookdex/orderbookdex.wasm',
-        #         abi_file=CUSTOMER_WASM_PATH + '/build/contracts/orderbookdex/orderbookdex.abi')
-        # smart.deploy()
-        # orderbookdex.set_account_permission(add_code=True)
-
-
-        # orderbookdex.push_action( "init", {})
-        # table_gloab = orderbookdex.table("config", "orderbookdex")
-        # print(table_gloab)
-        
-        # COMMENT('''
-        # add :
-        # ''')
-        # orderbookdex.push_action( "setsympair",[["8,METH", "amax.mtoken"],["6,MUSDT", "amax.mtoken"],"0.01000000 METH", "1.000000 MUSDT", True, True ], 
-        #                 dexadmin)
-        
-        # table_gloab = orderbookdex.table("sympair", "orderbookdex")
-        
-        # admin = new_account(master,"admin")
-
-        # u1 = self.init_account(master, admin, amax_token, amax_mtoken, "u1")
-        # u2 = self.init_account(master, admin, amax_token, amax_mtoken, "u2")
+        u1 = self.init_account(master, admin, amax_token, amax_mtoken, "u1")
+        u2 = self.init_account(master, admin, amax_token, amax_mtoken, "u2")
         # u3 = self.init_account(master, admin, amax_token, amax_mtoken, "u3")
         # u4 = self.init_account(master, admin, amax_token, amax_mtoken, "u4")
-
-        # #  const asset &limit_quant, const asset &frozen_quant,
-        # #  const asset &price, const uint64_t &external_id,
              
-             
-        # COMMENT('''
-        #  add order 
-        # ''')
+        COMMENT('''
+         add order 
+        ''')
         # orderbookdex.push_action("neworder", ["u1", 1, "buy", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 2, None ], u1)
         # table_gloab = orderbookdex.table("queue", "orderbookdex")
         
-        # u1.transfer(orderbookdex, "1.003000 MUSDT", "")
+        dex.neworder("u1", 1, "buy", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 2, None, u1)
         
-        # COMMENT('''
-        # finished
-        # ''')
-        # time.sleep(1)
+        u1.transfer(dex, "1.003000 MUSDT", "")
+        
+        time.sleep(1)
+        dex.neworder("u1", 1, "sell", "0.01000000  METH","0.01000000  METH", "200.000000 MUSDT", 3, None, u1)
+        u1.transfer(dex, "0.01000000  METH", "")
+        
+        time.sleep(1)
+        dex.neworder("u1", 1, "sell", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)
+        u1.transfer(dex, "0.01000000  METH", "")
+        
+        COMMENT('''
+        finished
+        ''')
+        time.sleep(1)
         
     def init_account(self, master, admin, amax_token, amax_mtoken, user):
         a = new_account(master, user)

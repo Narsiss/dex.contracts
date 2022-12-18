@@ -155,8 +155,11 @@ namespace dex {
             return id;
         }
 
-        inline uint64_t new_order_id(const uint64_t& pair_id, const order_side_t& side) {
-            uint64_t order_id =  new_auto_inc_id(order_id);
+        inline uint64_t new_order_sn() {
+            return new_auto_inc_id(order_id);
+        }
+
+        inline uint64_t new_order_id(const uint64_t& order_sn, const uint64_t& pair_id, const order_side_t& side) {
             return (pair_id << 49 | (uint64_t)order_side::index(side) << 48 | order_id);
         }
 
@@ -236,7 +239,8 @@ namespace dex {
     }
     //scope: order_side +  sympair_id
     struct DEX_TABLE order_t {
-        uint64_t        order_id;           // auto-increment
+        uint64_t        order_id;           
+        uint64_t        order_sn;           // auto-increment
         uint64_t        external_id;        // external id
         name            owner;
         uint64_t        sympair_id;         // id of symbol_pair_table
