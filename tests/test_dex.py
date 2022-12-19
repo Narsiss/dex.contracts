@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
         
         
         dex_path = "/Users/joslin/code/workspace/opensource/dex.contracts"
-        # init.build(dex_path)
+        init.build(dex_path)
         dex = init.ORDERBOOKDEX()
         dex.init(dex)
         dex.get_config(dex)
@@ -59,8 +59,9 @@ class Test(unittest.TestCase):
         dex.get_sympair(dex)
 
         
-        u1 = self.init_account(master, admin, amax_token, amax_mtoken, "u1")
-        u2 = self.init_account(master, admin, amax_token, amax_mtoken, "u2")
+        buyer = self.init_buyer_account(master, admin, amax_token, amax_mtoken, "buyer")
+        
+        seller = self.init_seller_account(master, admin, amax_token, amax_mtoken, "seller")
         # u3 = self.init_account(master, admin, amax_token, amax_mtoken, "u3")
         # u4 = self.init_account(master, admin, amax_token, amax_mtoken, "u4")
         
@@ -70,21 +71,29 @@ class Test(unittest.TestCase):
         # orderbookdex.push_action("neworder", ["u1", 1, "buy", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 2, None ], u1)
         # table_gloab = orderbookdex.table("queue", "orderbookdex")
         
-        dex.neworder("u1", 1, "buy", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 2, None, u1)
-        u1.transfer(dex, "1.003000 MUSDT", "")
+        dex.neworder("buyer", 1, "buy", "0.02000000  METH", "100.000000 MUSDT", 2, None, buyer)
+        buyer.transfer(dex, "2.006000 MUSDT", "")
         time.sleep(1)
         
-        dex.neworder("u1", 1, "sell", "0.01000000  METH","0.01000000  METH", "200.000000 MUSDT", 3, None, u1)
-        u1.transfer(dex, "0.01000000  METH", "")
+        
+        dex.neworder("seller", 1, "sell", "0.01000000  METH","99.000000 MUSDT", 3, None, seller)
+        seller.transfer(dex, "0.01000000  METH", "")
         time.sleep(1)
         
-        dex.neworder("u1", 1, "sell", "0.00500000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)
-        u1.transfer(dex, "0.00500000  METH", "")
+        dex.neworder("seller", 1, "sell", "0.00500000  METH", "80.000000 MUSDT", 4, None, seller)
+        seller.transfer(dex, "0.00500000  METH", "")
         time.sleep(1)
         
-        dex.neworder("u1", 1, "sell", "0.00600000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)
-        u1.transfer(dex, "0.00600000  METH", "")
-        time.sleep(1)
+        
+        # dex.neworder("u1", 1, "sell", "0.00600000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)
+        # u1.transfer(dex, "0.00600000  METH", "")
+        # time.sleep(1)
+        
+        
+        # dex.neworder("u1", 1, "sell", "0.00600000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)
+        # u1.transfer(dex, "0.00600000  METH", "")
+        # time.sleep(1)
+        
         
         # dex.neworder("u1", 1, "sell", "0.01000000  METH","0.01000000  METH", "101.000000 MUSDT", 4, None, u1)
         # u1.transfer(dex, "0.01000000  METH", "")
@@ -98,19 +107,17 @@ class Test(unittest.TestCase):
         ''')
         time.sleep(1)
         
-    def init_account(self, master, admin, amax_token, amax_mtoken, user):
+    def init_buyer_account(self, master, admin, amax_token, amax_mtoken, user):
+        a = new_account(master, user)
+        admin.transfer(a, "20.000000 MUSDT", "")
+        return a
+    
+    def init_seller_account(self, master, admin, amax_token, amax_mtoken, user):
         a = new_account(master, user)
         admin.transfer(a, "20.00000000 AMAX", "")
         admin.transfer(a, "20.00000000 METH", "")
         admin.transfer(a, "20.00000000 MBTC", "")
-        amax_mtoken.table("accounts", admin)
-        amax_mtoken.table("accounts", a)
-        amax_token.table("accounts", a)
-        admin.transfer(a, "20.000000 MUSDT", "")
-        amax_mtoken.table("accounts", a)
-        
-        
-        return a
-        
+        return a   
+    
 if __name__ == "__main__":
     unittest.main()
