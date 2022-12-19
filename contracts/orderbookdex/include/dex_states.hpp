@@ -263,7 +263,7 @@ namespace dex {
         uint64_t by_external_id()const  { return external_id; }
         uint64_t get_price()const       { 
             return order_side == order_side::BUY ? (std::numeric_limits<uint64_t>::max() - price.amount): price.amount;
-         }
+        }
 
         order_price_idx_key get_order_price_idx()const { 
             return make_order_price_idx( order_side ); 

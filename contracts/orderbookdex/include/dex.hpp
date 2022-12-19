@@ -48,7 +48,6 @@ public:
      * @param sympair_id - symbol pair id
      * @param order_side - order side, BUY | SELL
      * @param limit_quant - the limit quantity
-     * @param frozen_quant - the frozen quantity, unused
      * @param price - the price
      * @param external_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
@@ -60,7 +59,8 @@ public:
              const optional<dex::order_config_ex_t> &order_config_ex);
 
     ACTION buy( const name &user, const uint64_t &sympair_id,
-                const asset &quantity, const asset &price, const uint64_t &external_id,
+                const asset &quantity, const asset &price,
+                const uint64_t &external_id,
                 const optional<dex::order_config_ex_t> &order_config_ex);
 
     ACTION sell(const name &user, const uint64_t &sympair_id,
@@ -74,10 +74,17 @@ public:
      */
     ACTION match(const name &matcher, const uint64_t& pair_id, uint32_t max_count, const string &memo);
 
+    /**
+     * cancel order where order not finished
+     * 
+    */
     ACTION cancel(const uint64_t& pair_id, const name& side, const uint64_t &order_id);
 
-    ACTION cleandata(const uint64_t &max_count);
-
+    /**
+     * internal action for order matched.
+     * deal items
+     * 
+    */
     ACTION adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts );
 
     // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;

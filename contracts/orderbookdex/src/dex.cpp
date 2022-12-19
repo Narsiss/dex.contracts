@@ -209,11 +209,9 @@ void dex_contract::cancel(const uint64_t& pair_id, const name& side, const uint6
         bank = sym_pair_it->asset_symbol.get_contract();
     }
     CHECKC(quantity.amount >= 0, err::PARAM_ERROR, "Can not unfreeze the invalid quantity=" + quantity.to_string());
-    if (quantity.amount > 0) {
-        add_balance(order.owner, bank, quantity, balance_type::ordercancel, "order cancel: " + to_string(order_id));
-    }
+    
+    add_balance(order.owner, bank, quantity, balance_type::ordercancel, "order cancel: " + to_string(order_id));
     order_tbl.erase(it);
-
 }
 
 dex::config dex_contract::get_default_config() {
@@ -241,7 +239,7 @@ void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32
     CHECKC(sym_pair_it->enabled,                err::STATUS_ERROR, "The indicated sym_pair=" + std::to_string(sympair_id) + " is disabled");
 
     uint32_t matched_count = 0;
-    // match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
+    match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
     CHECKC(matched_count > 0,  err::PARAM_ERROR, "None matched");
 }
 
@@ -592,9 +590,4 @@ void dex_contract::sell(const name &user, const uint64_t &sympair_id, const asse
                              const optional<dex::order_config_ex_t> &order_config_ex) {
     new_order(user, sympair_id, order_side::SELL, quantity, price,
               external_id, order_config_ex);
-}
-
-void dex_contract::cleandata(const uint64_t &max_count) {
-    CHECK_DEX_ENABLED()
-    auto cur_block_time = current_block_time();
 }
