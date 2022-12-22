@@ -69,7 +69,6 @@ void dex_contract::setsympair(const extended_symbol&    asset_symbol,
                               const extended_symbol&    coin_symbol,
                               const asset&              min_asset_quant,
                               const asset&              min_coin_quant,
-                              bool                      only_accept_coin_fee,
                               bool                      enabled) {
     require_auth( _config.dex_admin );
     const auto &asset_sym = asset_symbol.get_symbol();
@@ -97,7 +96,6 @@ void dex_contract::setsympair(const extended_symbol&    asset_symbol,
             sym_pair.coin_symbol          = coin_symbol;
             sym_pair.min_asset_quant      = min_asset_quant;
             sym_pair.min_coin_quant       = min_coin_quant;
-            sym_pair.only_accept_coin_fee = only_accept_coin_fee;
             sym_pair.enabled              = enabled;
         });
     } else {
@@ -106,7 +104,6 @@ void dex_contract::setsympair(const extended_symbol&    asset_symbol,
         sympair_tbl.modify(*it, same_payer, [&](auto &sym_pair) {
             sym_pair.min_asset_quant      = min_asset_quant;
             sym_pair.min_coin_quant       = min_coin_quant;
-            sym_pair.only_accept_coin_fee = only_accept_coin_fee;
             sym_pair.enabled              = enabled;
         });
     }
@@ -260,8 +257,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         auto &maker_it = matching_pair_it.maker_it();
         auto &taker_it = matching_pair_it.taker_it();
-        TRACE_L("matching taker_order=", maker_it.stored_order());
         TRACE_L("matching maker_order=", taker_it.stored_order());
+        TRACE_L("matching taker_order=", maker_it.stored_order());
 
         const auto &matched_price = maker_it.stored_order().price;
         latest_deal_price = matched_price;
@@ -286,18 +283,10 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         const auto &asset_bank  = sym_pair.asset_symbol.get_contract();
         const auto &coin_bank   = sym_pair.coin_symbol.get_contract();
 
-        asset buy_fee;
-        // transfer the buy_fee from buy_order to dex_fee_collector
-        if (matched_coins.symbol == buy_order.matched_fee.symbol) {
-            buy_fee = calc_match_fee(buy_order, taker_it.order_side(), matched_coins);
-            // add_balance(_config.dex_fee_collector, coin_bank, buy_fee, balance_type::orderfee, "fee: " + to_string(buy_order.order_id));
-            _allot_fee(buy_order.owner, coin_bank, buy_fee, buy_order.order_id);
-        } else {
-            buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
-            buyer_recv_assets -= buy_fee;
-            // add_balance(_config.dex_fee_collector, asset_bank, buy_fee, balance_type::orderfee, "fee: " + to_string(buy_order.order_id));
-            _allot_fee(buy_order.owner, asset_bank, buy_fee, buy_order.order_id);
-        }
+        asset buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
+        buyer_recv_assets -= buy_fee;
+        add_balance(_config.dex_fee_collector, asset_bank, buy_fee,  balance_type::orderfee,
+                    " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
 
         auto sell_fee = calc_match_fee(sell_order, taker_it.order_side(), seller_recv_coins);
         seller_recv_coins -= sell_fee;
@@ -321,7 +310,6 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         // process refund
         asset buy_refund_coins(0, coin_symbol);
-
 
         deal_item_t deal_item;
         deal_item.id            = deal_id;
@@ -409,7 +397,6 @@ void dex_contract::_allot_fee(const name &from_user, const name& bank, const ass
     if(dex_fee.amount > 0){
         add_balance(_config.dex_fee_collector, bank, dex_fee, balance_type::ordermatched, "fee: " + to_string(order_id));
     }
-
 }
 
 void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price) {
@@ -427,19 +414,19 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
 }
 
 void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
-                            const name &order_side, const asset &limit_quant,
+                            const name &order_side, const asset &limit_asset_quant,
                             const asset &price,
                             const uint64_t &external_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
     // frozen_quant not in use
-    new_order(user, sympair_id, order_side, limit_quant, price, external_id, order_config_ex);
+    new_order(user, sympair_id, order_side, limit_asset_quant, price, external_id, order_config_ex);
 }
 
 /**
  * create order to queue
 */
 void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
-                             const name &order_side, const asset &limit_quant,
+                             const name &order_side, const asset &limit_asset_quant,
                              const optional<asset> &price,
                              const uint64_t &external_id,
                              const optional<dex::order_config_ex_t> &order_config_ex) {
@@ -473,26 +460,22 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
 
     asset frozen_quant;
     if (order_side == dex::order_side::BUY) {
-        CHECKC( limit_quant.symbol == asset_symbol, err::PARAM_ERROR,
-            "The limit_symbol=" + symbol_to_string(limit_quant.symbol) +
+        CHECKC( limit_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
+            "The limit_symbol=" + symbol_to_string(limit_asset_quant.symbol) +
             " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
             " for limit buy order");
         ASSERT(price.has_value());
-        frozen_quant = dex::calc_coin_quant(limit_quant, *price, coin_symbol);
-        if (sym_pair_it->only_accept_coin_fee) {
-            frozen_quant += dex::calc_match_fee(taker_fee_ratio, frozen_quant);
-        }
+        frozen_quant = dex::calc_coin_quant(limit_asset_quant, *price, coin_symbol);
 
     } else { // order_side == order_side::SELL
-        CHECKC( limit_quant.symbol == asset_symbol, err::PARAM_ERROR,
-                "The limit_symbol=" + symbol_to_string(limit_quant.symbol) +
+        CHECKC( limit_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
+                "The limit_symbol=" + symbol_to_string(limit_asset_quant.symbol) +
                     " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
                     " for sell order");
-        frozen_quant = limit_quant;
-    }
+        frozen_quant = limit_asset_quant;
+    }  
 
-    const auto &fee_symbol = (order_side == dex::order_side::BUY && !sym_pair_it->only_accept_coin_fee) ?
-            asset_symbol : coin_symbol;
+    const auto &fee_symbol = (order_side == dex::order_side::BUY) ? asset_symbol : coin_symbol;
 
     auto queue_tbl      = make_queue_table(get_self());
     auto acct_idx       = queue_tbl.get_index<"orderowner"_n>();
@@ -509,7 +492,7 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         order.order_side        = order_side;
         order.order_type    = order_type::LIMIT;
         order.price             = price ? *price : asset(0, coin_symbol);
-        order.limit_quant       = limit_quant;
+        order.limit_asset_quant       = limit_asset_quant;
         order.frozen_quant      = frozen_quant;
         order.taker_fee_ratio   = taker_fee_ratio;
         order.maker_fee_ratio   = maker_fee_ratio;
@@ -523,6 +506,21 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
 }
 
 void dex_contract::add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo){
+
+    balance_chg_tbl balances(_self, _self.value);
+    auto balance_id = balances.available_primary_key();
+
+    balances.emplace(_self, [&]( auto& row) {
+        row.balance_id      = balance_id;
+        row.user            = user;
+        row.bank            = bank;
+        row.quantity        = quantity;
+        row.type            = type;
+        row.memo            = memo;
+        TRACE_L("add_balance =", row);
+
+    });
+
     switch (type.value)
     {
     case balance_type::ordermatched.value:
@@ -579,15 +577,15 @@ void dex_contract::withdraw(const name &user, const name &bank, const asset& qua
 }
 
 void dex_contract::buy(const name &user, const uint64_t &sympair_id, const asset &quantity,
-                            const asset &price, const uint64_t &external_id,
-                            const optional<dex::order_config_ex_t> &order_config_ex) {
+                            const asset &price, const uint64_t &external_id) {
+    optional<dex::order_config_ex_t> order_config_ex;
     new_order(user, sympair_id, order_side::BUY, quantity, price,
               external_id, order_config_ex);
 }
 
 void dex_contract::sell(const name &user, const uint64_t &sympair_id, const asset &quantity,
-                             const asset &price, const uint64_t &external_id,
-                             const optional<dex::order_config_ex_t> &order_config_ex) {
+                             const asset &price, const uint64_t &external_id) {
+    optional<dex::order_config_ex_t> order_config_ex;
     new_order(user, sympair_id, order_side::SELL, quantity, price,
               external_id, order_config_ex);
 }

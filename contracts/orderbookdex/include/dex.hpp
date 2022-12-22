@@ -31,7 +31,7 @@ public:
     ACTION setsympair(  const extended_symbol &asset_symbol,
                         const extended_symbol &coin_symbol,
                         const asset &min_asset_quant, const asset &min_coin_quant,
-                        bool only_accept_coin_fee, bool enabled);
+                        bool enabled);
 
     ACTION onoffsympair(const uint64_t& sympair_id, const bool& on_off);
 
@@ -43,30 +43,37 @@ public:
     ACTION withdraw(const name& user, const name &bank, const asset& quant, const string& memo);
 
     /**
-     * new order, should deposit by transfer first
+     * create a new order
      * @param user - user, owner of order
      * @param sympair_id - symbol pair id
      * @param order_side - order side, BUY | SELL
-     * @param limit_quant - the limit quantity
+     * @param limit_asset_quant - the limit quantity
      * @param price - the price
      * @param external_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
      */
     ACTION neworder(const name &user, const uint64_t &sympair_id,
             const name &order_side,
-             const asset &limit_quant,
+             const asset &limit_asset_quant,
              const asset &price, const uint64_t &external_id,
              const optional<dex::order_config_ex_t> &order_config_ex);
 
+
+    /**
+     * create buy new order
+     * @param user - user, owner of order
+     * @param sympair_id - symbol pair id
+     * @param quantity - quantity
+     * @param price - the price
+     * @param external_id - external id, always set by application
+     */
     ACTION buy( const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
-                const uint64_t &external_id,
-                const optional<dex::order_config_ex_t> &order_config_ex);
+                const uint64_t &external_id);
 
     ACTION sell(const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
-                const uint64_t &external_id,
-                const optional<dex::order_config_ex_t> &order_config_ex);
+                const uint64_t &external_id);
 
     /**
      *  @param max_count the max count of match item
@@ -144,7 +151,7 @@ private:
 
     void new_order(const name &user, const uint64_t &sympair_id,
             const name &order_side,
-            const asset &limit_quant,
+            const asset &limit_asset_quant,
             const optional<asset> &price,
             const uint64_t &external_id,
             const optional<dex::order_config_ex_t> &order_config_ex);

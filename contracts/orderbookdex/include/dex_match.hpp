@@ -121,10 +121,10 @@ namespace dex {
             _matched_fee    += new_matched_fee;
             const auto &order = *_idx_itr->itr;
 
-            CHECK(_matched_assets <= order.limit_quant,
+            CHECK(_matched_assets <= order.limit_asset_quant,
                 "The matched assets=" + _matched_assets.to_string() +
-                " is overflow with limit_quant=" + order.limit_quant.to_string());
-            _complete = _matched_assets == order.limit_quant;
+                " is overflow with limit_asset_quant=" + order.limit_asset_quant.to_string());
+            _complete = _matched_assets == order.limit_asset_quant;
 
             if (order.order_side == order_side::BUY) {
                 auto total_matched_coins = (_matched_coins.symbol == _matched_fee.symbol) ?
@@ -142,10 +142,10 @@ namespace dex {
         }
 
 
-        inline asset get_free_limit_quant() const {
-            TRACE_L("get_free_limit_quant");
+        inline asset get_free_limit_asset_quant() const {
+            TRACE_L("get_free_limit_asset_quant");
             ASSERT(_idx_itr->is_valid());
-            asset ret = _idx_itr->itr->limit_quant - _matched_assets;
+            asset ret = _idx_itr->itr->limit_asset_quant - _matched_assets;
             ASSERT(ret.amount >= 0);
             return ret;
         }
@@ -253,14 +253,14 @@ namespace dex {
             ASSERT( _maker_itr->stored_order().price.amount > 0);
 
             const auto &matched_price   = _maker_itr->stored_order().price;
-            auto maker_free_assets      = _maker_itr->get_free_limit_quant();
+            auto maker_free_assets      = _maker_itr->get_free_limit_asset_quant();
 
             ASSERT(maker_free_assets.symbol == asset_symbol);
             CHECK(maker_free_assets.amount > 0, "MUST: maker_free_assets > 0");
 
             asset taker_free_assets;
 
-            taker_free_assets = _taker_itr->get_free_limit_quant();
+            taker_free_assets = _taker_itr->get_free_limit_asset_quant();
             ASSERT(taker_free_assets.symbol == asset_symbol);
             CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
 

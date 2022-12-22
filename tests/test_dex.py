@@ -18,7 +18,7 @@ class Test(unittest.TestCase):
         SCENARIO('''
         Create a contract from template, then build and deploy it.
         ''')
-        reset("/tmp/amaxfactory/log/dex.log")
+        reset("/Users/joslin/amaxfactory/log/dex.log")
     
     
     @classmethod
@@ -55,7 +55,7 @@ class Test(unittest.TestCase):
         dexadmin = new_account(master,"dexadmin")
         admin = new_account(master,"admin")
         
-        dex.setsympair(["8,METH", "amax.mtoken"], ["6,MUSDT", "amax.mtoken"], "0.01000000 METH","1.000000 MUSDT", True, True, dexadmin )
+        dex.setsympair(["8,METH", "amax.mtoken"], ["6,MUSDT", "amax.mtoken"], "0.01000000 METH","1.000000 MUSDT", True, dexadmin )
         dex.get_sympair(dex)
 
         
@@ -71,18 +71,25 @@ class Test(unittest.TestCase):
         # orderbookdex.push_action("neworder", ["u1", 1, "buy", "0.01000000  METH","0.01000000  METH", "100.000000 MUSDT", 2, None ], u1)
         # table_gloab = orderbookdex.table("queue", "orderbookdex")
         
-        dex.neworder("buyer", 1, "buy", "0.02000000  METH", "100.000000 MUSDT", 2, None, buyer)
-        buyer.transfer(dex, "2.006000 MUSDT", "")
-        time.sleep(1)
-        
-        
-        dex.neworder("seller", 1, "sell", "0.01000000  METH","99.000000 MUSDT", 3, None, seller)
+        dex.neworder("seller", 1, "sell", "0.01000000  METH","300.000000 MUSDT", 3, None, seller)
         seller.transfer(dex, "0.01000000  METH", "")
         time.sleep(1)
         
-        dex.neworder("seller", 1, "sell", "0.00500000  METH", "80.000000 MUSDT", 4, None, seller)
-        seller.transfer(dex, "0.00500000  METH", "")
+        dex.neworder("buyer", 1, "buy", "0.02000000  METH", "400.000000 MUSDT", 2, None, buyer)
+        buyer.transfer(dex, "8.000000 MUSDT", "")
         time.sleep(1)
+        
+  
+        
+        # dex.neworder("buyer", 1, "buy", "0.02000000  METH", "200.000000 MUSDT", 2, None, buyer)
+        # buyer.transfer(dex, "4.012000 MUSDT", "")
+        # time.sleep(1)
+        
+        
+        
+        # dex.neworder("seller", 1, "sell", "0.00500000  METH", "80.000000 MUSDT", 4, None, seller)
+        # seller.transfer(dex, "0.00500000  METH", "")
+        # time.sleep(1)
         
         
         # dex.neworder("u1", 1, "sell", "0.00600000  METH","0.01000000  METH", "100.000000 MUSDT", 4, None, u1)

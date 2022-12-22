@@ -110,8 +110,8 @@ namespace dex {
         bool        admin_sign_required;    // check the order must have the authorization by dex admin
 
         set<extended_symbol> support_quote_symbols;
-        uint64_t    parent_reward_ratio;
-        uint64_t    grand_reward_ratio;
+        uint64_t    parent_reward_ratio;    //parent reward ratio of total fee
+        uint64_t    grand_reward_ratio;     //grand reward ratio of total fee
 
         uint64_t    apl_farm_id;
         map<symbol_code, uint32_t> farm_scales;
@@ -209,7 +209,6 @@ namespace dex {
         asset           latest_deal_price;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
-        bool            only_accept_coin_fee;
         bool            enabled;
         uint64_t        farm_lease_id;
         int64_t         farm_ratio;
@@ -247,7 +246,7 @@ namespace dex {
         order_side_t    order_side;
         order_type_t    order_type;
         asset           price;
-        asset           limit_quant;
+        asset           limit_asset_quant;
         asset           frozen_quant;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
@@ -280,7 +279,7 @@ namespace dex {
                 PP(order_side),
                 PP(order_type),
                 PP(price),
-                PP(limit_quant),
+                PP(limit_asset_quant),
                 PP(frozen_quant),
                 PP(taker_fee_ratio),
                 PP(maker_fee_ratio),
@@ -363,7 +362,39 @@ namespace dex {
     };
 
     typedef eosio::multi_index<"rewards"_n, rewards_t> rewards_tbl;
+
+
+    struct DEX_TABLE balance_chg_t
+    {
+        uint64_t balance_id;
+        name    user;
+        name    bank;
+        asset   quantity;
+        name    type;
+        string  memo;
+
+        uint64_t primary_key() const { return balance_id; }
+
+        balance_chg_t() {}
+        balance_chg_t(const uint64_t &id) : balance_id(id) {}
+
+
+        void print() const {
+            PRINT_PROPERTIES(
+                PP(user),
+                PP(bank),
+                PP0(quantity),
+                PP(type),
+                PP(memo)
+            );
+        }
         
+        EOSLIB_SERIALIZE(balance_chg_t, (balance_id)(user)(bank)(quantity)(type)(memo))
+
+    };
+
+    typedef eosio::multi_index<"balances"_n, balance_chg_t> balance_chg_tbl;
+
     typedef eosio::multi_index<"sympair"_n, symbol_pair_t, symbols_idx> symbol_pair_table;
     inline static rewards_tbl make_reward_table(const name &self) { return rewards_tbl(self, self.value/*scope*/); }
 
