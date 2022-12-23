@@ -155,12 +155,8 @@ namespace dex {
             return id;
         }
 
-        inline uint64_t new_order_sn() {
+        inline uint64_t new_order_id() {
             return new_auto_inc_id(order_id);
-        }
-
-        inline uint64_t new_order_id(const uint64_t& order_sn, const uint64_t& pair_id, const order_side_t& side) {
-            return (pair_id << 49 | (uint64_t)order_side::index(side) << 48 | order_id);
         }
 
         inline uint64_t new_queue_order_id() {
@@ -239,7 +235,6 @@ namespace dex {
     //scope: order_side +  sympair_id
     struct DEX_TABLE order_t {
         uint64_t        order_id;           
-        uint64_t        order_sn;           // auto-increment
         uint64_t        external_id;        // external id
         name            owner;
         uint64_t        sympair_id;         // id of symbol_pair_table
@@ -250,8 +245,8 @@ namespace dex {
         asset           frozen_quant;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
-        asset           matched_assets;     //!< total matched asset quantity
-        asset           matched_coins;      //!< total matched coin quantity
+        asset           matched_asset_quant; //!< total matched asset quantity
+        asset           matched_coin_quant;      //!< total matched coin quantity
         asset           matched_fee;        //!< total matched fees
         time_point      created_at;
         time_point      last_updated_at;
@@ -283,8 +278,8 @@ namespace dex {
                 PP(frozen_quant),
                 PP(taker_fee_ratio),
                 PP(maker_fee_ratio),
-                PP(matched_assets),
-                PP(matched_coins),
+                PP(matched_asset_quant),
+                PP(matched_coin_quant),
                 PP(matched_fee),
                 PP(created_at),
                 PP(last_updated_at),
@@ -300,7 +295,7 @@ namespace dex {
     typedef eosio::multi_index<"queue"_n, order_t, order_owner_idx> queue_tbl;
 
     inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id, const order_side_t& side ) { \
-                    return order_tbl(self, pair_id << 8 | uint64_t(order_side::index(side))); \
+                    return order_tbl(self, pair_id * 10000 + uint64_t(order_side::index(side))); \
                 }
     
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
@@ -310,16 +305,14 @@ namespace dex {
         uint64_t    id;
         uint64_t    sympair_id;
         uint64_t    buy_order_id;
-        uint64_t    buy_order_sn;
         uint64_t    sell_order_id;
-        uint64_t    sell_order_sn;
-        asset       deal_assets;
-        asset       deal_coins;
+        asset       deal_asset_quant;
+        asset       deal_coin_quant;
         asset       deal_price;
         order_side_t taker_side;
         asset       buy_fee;
         asset       sell_fee;
-        asset       buy_refund_coins;
+        asset       buy_refund_coin_quant;
         string      memo;
         time_point  deal_time;
 
@@ -329,16 +322,14 @@ namespace dex {
                 PP0(id),
                 PP(sympair_id),
                 PP(buy_order_id),
-                PP(buy_order_sn),
                 PP(sell_order_id),
-                PP(sell_order_sn),
-                PP(deal_assets),
-                PP(deal_coins),
+                PP(deal_asset_quant),
+                PP(deal_coin_quant),
                 PP(deal_price),
                 PP(taker_side),
                 PP(buy_fee),
                 PP(sell_fee),
-                PP(buy_refund_coins),
+                PP(buy_refund_coin_quant),
                 PP(memo),
                 PP(deal_time)
             );

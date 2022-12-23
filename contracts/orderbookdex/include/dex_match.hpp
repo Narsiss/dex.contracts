@@ -4,7 +4,6 @@
 #include <utils.hpp>
 
 
-#define ORDER_SN(orderId) orderId&0xFFFFFF
 
 namespace dex {
 
@@ -97,8 +96,8 @@ namespace dex {
             TRACE_L("matching_order_iterator::save_matching_order");
             if(_idx_itr && _idx_itr->is_valid() ) {
                 _idx_itr->idx->modify(_idx_itr->itr, same_payer, [&]( auto& a ) {
-                    a.matched_assets = _matched_assets;
-                    a.matched_coins = _matched_coins;
+                    a.matched_asset_quant = _matched_asset_quant;
+                    a.matched_coin_quant = _matched_coin_quant;
                     a.matched_fee = _matched_fee;
                     a.last_updated_at = current_block_time();
                     a.last_deal_id = _last_deal_id;
@@ -111,27 +110,27 @@ namespace dex {
         }
 
         inline void match(uint64_t deal_id,
-                    const asset &new_matched_assets,
-                    const asset &new_matched_coins,
+                    const asset &new_matched_asset_quant,
+                    const asset &new_matched_coin_quant,
                     const asset &new_matched_fee) {
 
             _last_deal_id   = deal_id;
-            _matched_assets += new_matched_assets;
-            _matched_coins  += new_matched_coins;
+            _matched_asset_quant += new_matched_asset_quant;
+            _matched_coin_quant  += new_matched_coin_quant;
             _matched_fee    += new_matched_fee;
             const auto &order = *_idx_itr->itr;
 
-            CHECK(_matched_assets <= order.limit_asset_quant,
-                "The matched assets=" + _matched_assets.to_string() +
+            CHECK(_matched_asset_quant <= order.limit_asset_quant,
+                "The matched assets=" + _matched_asset_quant.to_string() +
                 " is overflow with limit_asset_quant=" + order.limit_asset_quant.to_string());
-            _complete = _matched_assets == order.limit_asset_quant;
+            _complete = _matched_asset_quant == order.limit_asset_quant;
 
             if (order.order_side == order_side::BUY) {
-                CHECK(_matched_coins <= order.frozen_quant,
-                        "The _matched_coins =" + _matched_coins.to_string() +
+                CHECK(_matched_coin_quant <= order.frozen_quant,
+                        "The _matched_coin_quant =" + _matched_coin_quant.to_string() +
                         " is overflow with frozen_quant=" + order.frozen_quant.to_string() + " for buy order");
                 if (_complete) {
-                    _refund_coins = order.frozen_quant - _matched_coins;
+                    _refund_coins = order.frozen_quant - _matched_coin_quant;
                 }
             }
         }
@@ -140,7 +139,7 @@ namespace dex {
         inline asset get_free_limit_asset_quant() const {
             TRACE_L("get_free_limit_asset_quant");
             ASSERT(_idx_itr->is_valid());
-            asset ret = _idx_itr->itr->limit_asset_quant - _matched_assets;
+            asset ret = _idx_itr->itr->limit_asset_quant - _matched_asset_quant;
             ASSERT(ret.amount >= 0);
             return ret;
         }
@@ -178,10 +177,10 @@ namespace dex {
             TRACE("found order! order=", stored_order, "\n");
 
             _last_deal_id   = stored_order.last_deal_id;
-            _matched_assets = stored_order.matched_assets;
-            _matched_coins  = stored_order.matched_coins;
+            _matched_asset_quant = stored_order.matched_asset_quant;
+            _matched_coin_quant  = stored_order.matched_coin_quant;
             _matched_fee    = stored_order.matched_fee;
-            _refund_coins   = asset(0, _matched_coins.symbol);
+            _refund_coins   = asset(0, _matched_coin_quant.symbol);
             _complete       = false;
         }
 
@@ -190,8 +189,8 @@ namespace dex {
         order_side_t                _order_side;
 
         uint64_t                    _last_deal_id = 0;
-        asset                       _matched_assets;      //!< total matched asset amount
-        asset                       _matched_coins;       //!< total matched coin amount
+        asset                       _matched_asset_quant;      //!< total matched asset amount
+        asset                       _matched_coin_quant;       //!< total matched coin amount
         asset                       _matched_fee;        //!< total matched fees
         asset                       _refund_coins;
         bool                        _complete;
@@ -242,7 +241,7 @@ namespace dex {
             return *_taker_itr;
         }
 
-        void calc_matched_amounts(asset &matched_assets, asset &matched_coins) {
+        void calc_matched_amounts(asset &matched_asset_quant, asset &matched_coin_quant) {
             const auto &asset_symbol    = _sym_pair.asset_symbol.get_symbol();
             const auto &coin_symbol     = _sym_pair.coin_symbol.get_symbol();
             ASSERT( _maker_itr->stored_order().price.amount > 0);
@@ -259,8 +258,8 @@ namespace dex {
             ASSERT(taker_free_assets.symbol == asset_symbol);
             CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
 
-            matched_assets = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
-            matched_coins = calc_coin_quant(matched_assets, matched_price, coin_symbol);
+            matched_asset_quant = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
+            matched_coin_quant = calc_coin_quant(matched_asset_quant, matched_price, coin_symbol);
         }
 
     private:
@@ -280,11 +279,11 @@ namespace dex {
             if (!_can_match) {
                 TRACE_L("_can_match begin");
                 _can_match = true;
-                TRACE_L("_can_match: ", _buy_itr->is_valid(), _sell_itr->is_valid(),", buy:", _buy_itr->stored_order().order_sn, "  ",
-                                         _buy_itr->stored_order().price,", sell:", _buy_itr->stored_order().order_sn, "  ", _sell_itr->stored_order().price);
+                TRACE_L("_can_match: ", _buy_itr->is_valid(), _sell_itr->is_valid(),", buy:", _buy_itr->stored_order().order_id, "  ",
+                                         _buy_itr->stored_order().price,", sell:", _buy_itr->stored_order().order_id, "  ", _sell_itr->stored_order().price);
                 if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
                      _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
-                    if ( _buy_itr->stored_order().order_sn > _sell_itr->stored_order().order_sn ) {
+                    if ( _buy_itr->stored_order().order_id > _sell_itr->stored_order().order_id ) {
                         _taker_itr = _buy_itr;
                         _maker_itr = _sell_itr;
                     } else {

@@ -157,9 +157,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     CHECKC( order_itr->frozen_quant == quant,       err::STATUS_ERROR, "require quantity is " + order_itr->frozen_quant.to_string() )
 
     auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_side );
-    TRACE_L ( "order_tbl, scpoe: ", ( order_itr->sympair_id << 8 | uint64_t(order_side::index(order_itr->order_side))));
-    auto order_sn = _global->new_order_sn();
-    auto order_id = _global->new_order_id(order_sn, order_itr->sympair_id, order_itr->order_side);
+    auto order_id = _global->new_order_id();
     TRACE_L ( "order_tbl, order_id:", order_id);
 
     // auto _index=     order_tbl.get_index<"orderprice"_n>();
@@ -167,7 +165,6 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     order_tbl.emplace(_self, [&](auto &order_info) {
         order_info          = *order_itr;
         order_info.order_id = order_id;
-        order_info.order_sn = order_sn;
     });
     queue_owner_idx.erase(order_itr);
     
@@ -199,10 +196,10 @@ void dex_contract::cancel(const uint64_t& pair_id, const name& side, const uint6
     asset quantity;
     name bank;
     if (order.order_side == order_side::BUY) {
-        quantity = order.frozen_quant - order.matched_coins;
+        quantity = order.frozen_quant - order.matched_coin_quant;
         bank = sym_pair_it->coin_symbol.get_contract();
     } else { // order.order_side == order_side::SELL
-        quantity = order.frozen_quant - order.matched_assets;
+        quantity = order.frozen_quant - order.matched_asset_quant;
         bank = sym_pair_it->asset_symbol.get_contract();
     }
     CHECKC(quantity.amount >= 0, err::PARAM_ERROR, "Can not unfreeze the invalid quantity=" + quantity.to_string());
@@ -261,12 +258,12 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         const auto &matched_price = maker_it.stored_order().price;
         latest_deal_price = matched_price;
 
-        asset matched_coins;
-        asset matched_assets;
-        matching_pair_it.calc_matched_amounts(matched_assets, matched_coins);
-        CHECKC(matched_assets.amount > 0 || matched_coins.amount > 0, err::PARAM_ERROR, "Invalid calc_matched_amounts!");
-        if (matched_assets.amount == 0 || matched_coins.amount == 0) {
-            TRACE_L("Dust calc_matched_amounts! ", PP0(matched_assets), PP(matched_coins));
+        asset matched_coin_quant;
+        asset matched_asset_quant;
+        matching_pair_it.calc_matched_amounts(matched_asset_quant, matched_coin_quant);
+        CHECKC(matched_asset_quant.amount > 0 || matched_coin_quant.amount > 0, err::PARAM_ERROR, "Invalid calc_matched_amounts!");
+        if (matched_asset_quant.amount == 0 || matched_coin_quant.amount == 0) {
+            TRACE_L("Dust calc_matched_amounts! ", PP0(matched_asset_quant), PP(matched_coin_quant));
         }
 
         auto &buy_it = (taker_it.order_side() == order_side::BUY) ? taker_it : maker_it;
@@ -274,8 +271,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         const auto &buy_order   = buy_it.stored_order();
         const auto &sell_order  = sell_it.stored_order();
-        asset seller_recv_coins = matched_coins;
-        asset buyer_recv_assets = matched_assets;
+        asset seller_recv_coins = matched_coin_quant;
+        asset buyer_recv_assets = matched_asset_quant;
         const auto &asset_symbol = sym_pair.asset_symbol.get_symbol();
         const auto &coin_symbol = sym_pair.coin_symbol.get_symbol();
         const auto &asset_bank  = sym_pair.asset_symbol.get_contract();
@@ -284,36 +281,36 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         asset buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
         buyer_recv_assets -= buy_fee;
         add_balance(_config.dex_fee_collector, asset_bank, buy_fee,  balance_type::orderfee,
-                    " order_id " + to_string(sell_order.order_sn) + " deal with " + to_string(buy_order.order_sn));
+                    " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
 
         auto sell_fee = calc_match_fee(sell_order, taker_it.order_side(), seller_recv_coins);
         seller_recv_coins -= sell_fee;
         // transfer the sell_fee from sell_order to dex_fee_collector
-        _allot_fee(sell_order.owner, coin_bank, sell_fee, sell_order.order_sn);
+        _allot_fee(sell_order.owner, coin_bank, sell_fee, sell_order.order_id);
 
         // transfer the coins from buy_order to seller
         add_balance(sell_order.owner, coin_bank, seller_recv_coins,  balance_type::ordermatched,
-                " order_id " + to_string(sell_order.order_sn) + " deal with " + to_string(buy_order.order_sn));
+                " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
 
         // transfer the assets from sell_order  to buyer
         add_balance(buy_order.owner, asset_bank, buyer_recv_assets,  balance_type::ordermatched,
-                " order_id " + to_string(buy_order.order_sn) + " deal with " + to_string(sell_order.order_sn));
+                " order_id " + to_string(buy_order.order_id) + " deal with " + to_string(sell_order.order_id));
 
         auto deal_id = _global->new_deal_item_id();
 
-        buy_it.match(deal_id, matched_assets, matched_coins, buy_fee);
-        sell_it.match(deal_id, matched_assets, matched_coins, sell_fee);
+        buy_it.match(deal_id, matched_asset_quant, matched_coin_quant, buy_fee);
+        sell_it.match(deal_id, matched_asset_quant, matched_coin_quant, sell_fee);
 
         CHECKC(buy_it.is_completed() || sell_it.is_completed(), err::STATUS_ERROR, "Neither buy_order nor sell_order is completed");
 
         // process refund
-        asset buy_refund_coins(0, coin_symbol);
+        asset buy_refund_coin_quant(0, coin_symbol);
 
         if (buy_it.is_completed()) {
-            buy_refund_coins = buy_it.get_refund_coins();
-            if (buy_refund_coins.amount > 0) {
+            buy_refund_coin_quant = buy_it.get_refund_coins();
+            if (buy_refund_coin_quant.amount > 0) {
                 // refund from buy_order to buyer
-                add_balance(buy_order.owner, coin_bank, buy_refund_coins,
+                add_balance(buy_order.owner, coin_bank, buy_refund_coin_quant,
                     balance_type::orderrefund, " order_id: " + to_string(buy_order.order_id));
             }
         }
@@ -322,16 +319,14 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         deal_item.id            = deal_id;
         deal_item.sympair_id    = sym_pair.sympair_id;        
         deal_item.buy_order_id  = buy_order.order_id;
-        deal_item.buy_order_sn  = buy_order.order_sn;
         deal_item.sell_order_id = sell_order.order_id;
-        deal_item.sell_order_sn = sell_order.order_sn;
-        deal_item.deal_assets   = matched_assets;
-        deal_item.deal_coins    = matched_coins;
+        deal_item.deal_asset_quant   = matched_asset_quant;
+        deal_item.deal_coin_quant    = matched_coin_quant;
         deal_item.deal_price    = matched_price;
         deal_item.taker_side    = taker_it.order_side();
         deal_item.buy_fee       = buy_fee;
         deal_item.sell_fee      = sell_fee;
-        deal_item.buy_refund_coins = buy_refund_coins;
+        deal_item.buy_refund_coin_quant = buy_refund_coin_quant;
         deal_item.memo          = memo;
         deal_item.deal_time     = cur_block_time;
         items.push_back(deal_item);
@@ -493,8 +488,8 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         order.frozen_quant      = frozen_quant;
         order.taker_fee_ratio   = taker_fee_ratio;
         order.maker_fee_ratio   = maker_fee_ratio;
-        order.matched_assets    = asset(0, asset_symbol);
-        order.matched_coins     = asset(0, coin_symbol);
+        order.matched_asset_quant    = asset(0, asset_symbol);
+        order.matched_coin_quant     = asset(0, coin_symbol);
         order.matched_fee       = asset(0, fee_symbol);
         order.created_at        = cur_block_time;
         order.last_updated_at   = cur_block_time;
