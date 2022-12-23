@@ -243,12 +243,10 @@ void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32
 void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
                                   uint32_t max_count, uint32_t &matched_count, const string &memo) {
     auto cur_block_time     = current_block_time();
-    TRACE_L( "match_sympair matching_pair_iterator enter ");
     auto matching_pair_it = dex::matching_pair_iterator( sym_pair,
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::BUY),
         dex::make_order_iterator(get_self(), sym_pair, dex::order_side::SELL)
     );
-    TRACE_L("match_sympair matching_pair_iterator ");
     
     asset latest_deal_price;
     std::list<deal_item_t> items;
@@ -286,20 +284,20 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         asset buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
         buyer_recv_assets -= buy_fee;
         add_balance(_config.dex_fee_collector, asset_bank, buy_fee,  balance_type::orderfee,
-                    " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
+                    " order_id " + to_string(sell_order.order_sn) + " deal with " + to_string(buy_order.order_sn));
 
         auto sell_fee = calc_match_fee(sell_order, taker_it.order_side(), seller_recv_coins);
         seller_recv_coins -= sell_fee;
         // transfer the sell_fee from sell_order to dex_fee_collector
-        _allot_fee(sell_order.owner, coin_bank, sell_fee, sell_order.order_id);
+        _allot_fee(sell_order.owner, coin_bank, sell_fee, sell_order.order_sn);
 
         // transfer the coins from buy_order to seller
         add_balance(sell_order.owner, coin_bank, seller_recv_coins,  balance_type::ordermatched,
-                " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
+                " order_id " + to_string(sell_order.order_sn) + " deal with " + to_string(buy_order.order_sn));
 
         // transfer the assets from sell_order  to buyer
         add_balance(buy_order.owner, asset_bank, buyer_recv_assets,  balance_type::ordermatched,
-                " order_id " + to_string(buy_order.order_id) + " deal with " + to_string(sell_order.order_id));
+                " order_id " + to_string(buy_order.order_sn) + " deal with " + to_string(sell_order.order_sn));
 
         auto deal_id = _global->new_deal_item_id();
 
@@ -310,6 +308,15 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         // process refund
         asset buy_refund_coins(0, coin_symbol);
+
+        if (buy_it.is_completed()) {
+            buy_refund_coins = buy_it.get_refund_coins();
+            if (buy_refund_coins.amount > 0) {
+                // refund from buy_order to buyer
+                add_balance(buy_order.owner, coin_bank, buy_refund_coins,
+                    balance_type::orderrefund, " order_id: " + to_string(buy_order.order_id));
+            }
+        }
 
         deal_item_t deal_item;
         deal_item.id            = deal_id;
@@ -336,25 +343,15 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         matched_count++;
 
-        if (buy_it.is_completed()) {
-            buy_refund_coins = buy_it.get_refund_coins();
-            if (buy_refund_coins.amount > 0) {
-                // refund from buy_order to buyer
-                add_balance(buy_order.owner, coin_bank, buy_refund_coins,
-                    balance_type::orderrefund, " order_id: " + to_string(buy_order.order_id));
-            }
-        }
         TRACE_L("match round end: " , matched_count);
-
         matching_pair_it.complete_and_next();
-
     }
+
     TRACE_L("match finished: " , matched_count);
 
     ADD_ACTION( items, time_point_sec(current_time_point()) );
 
     TRACE_L("save matching order begin");
-
     matching_pair_it.save_matching_order();
     TRACE_L("save matching order end");
 

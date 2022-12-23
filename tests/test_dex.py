@@ -42,8 +42,15 @@ class Test(unittest.TestCase):
         COMMENT('''
         finished
         ''')
-        
         master = new_master_account()
+        
+        buyerpp1 = new_account(master, "buyerpp1")
+        buyerp1 = new_account(buyerpp1, "buyerp1")
+        
+        sellerpp1 = new_account(master, "sellerpp1")
+        sellerp1 = new_account(sellerpp1, "sellerp1")
+        
+        
         amax_token  = init.deploy_amax()
         amax_mtoken = init.deploy_mtoken()
         farm = init.deploy_farm()
@@ -59,9 +66,9 @@ class Test(unittest.TestCase):
         dex.get_sympair(dex)
 
         
-        buyer = self.init_buyer_account(master, admin, amax_token, amax_mtoken, "buyer")
+        buyer = self.init_buyer_account(buyerp1, admin, amax_token, amax_mtoken, "buyer")
         
-        seller = self.init_seller_account(master, admin, amax_token, amax_mtoken, "seller")
+        seller = self.init_seller_account(sellerp1, admin, amax_token, amax_mtoken, "seller")
         # u3 = self.init_account(master, admin, amax_token, amax_mtoken, "u3")
         # u4 = self.init_account(master, admin, amax_token, amax_mtoken, "u4")
         
@@ -75,8 +82,8 @@ class Test(unittest.TestCase):
         seller.transfer(dex, "0.01000000  METH", "")
         time.sleep(1)
         
-        dex.neworder("buyer", 1, "buy", "0.02000000  METH", "400.000000 MUSDT", 2, None, buyer)
-        buyer.transfer(dex, "8.000000 MUSDT", "")
+        dex.neworder("buyer", 1, "buy", "0.01000000  METH", "400.000000 MUSDT", 2, None, buyer)
+        buyer.transfer(dex, "4.000000 MUSDT", "")
         time.sleep(1)
         
   
@@ -114,13 +121,13 @@ class Test(unittest.TestCase):
         ''')
         time.sleep(1)
         
-    def init_buyer_account(self, master, admin, amax_token, amax_mtoken, user):
-        a = new_account(master, user)
+    def init_buyer_account(self, p1, admin, amax_token, amax_mtoken, user):
+        a = new_account(p1, user)
         admin.transfer(a, "20.000000 MUSDT", "")
         return a
     
-    def init_seller_account(self, master, admin, amax_token, amax_mtoken, user):
-        a = new_account(master, user)
+    def init_seller_account(self, p1, admin, amax_token, amax_mtoken, user):
+        a = new_account(p1, user)
         admin.transfer(a, "20.00000000 AMAX", "")
         admin.transfer(a, "20.00000000 METH", "")
         admin.transfer(a, "20.00000000 MBTC", "")
