@@ -306,6 +306,8 @@ namespace dex {
         uint64_t    sympair_id;
         uint64_t    buy_order_id;
         uint64_t    sell_order_id;
+        name        buyer;
+        name        seller;
         asset       deal_asset_quant;
         asset       deal_coin_quant;
         asset       deal_price;
@@ -323,6 +325,8 @@ namespace dex {
                 PP(sympair_id),
                 PP(buy_order_id),
                 PP(sell_order_id),
+                PP(buyer),
+                PP(seller),
                 PP(deal_asset_quant),
                 PP(deal_coin_quant),
                 PP(deal_price),

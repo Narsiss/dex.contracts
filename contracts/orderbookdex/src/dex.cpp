@@ -320,6 +320,8 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
         deal_item.sympair_id    = sym_pair.sympair_id;        
         deal_item.buy_order_id  = buy_order.order_id;
         deal_item.sell_order_id = sell_order.order_id;
+        deal_item.buyer         = buy_order.owner;
+        deal_item.seller        = sell_order.owner;
         deal_item.deal_asset_quant   = matched_asset_quant;
         deal_item.deal_coin_quant    = matched_coin_quant;
         deal_item.deal_price    = matched_price;
