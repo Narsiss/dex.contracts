@@ -49,13 +49,13 @@ public:
      * @param order_side - order side, BUY | SELL
      * @param limit_asset_quant - the limit quantity
      * @param price - the price
-     * @param external_id - external id, always set by application
+     * @param ext_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
      */
     ACTION neworder(const name &user, const uint64_t &sympair_id,
             const name &order_side,
              const asset &limit_asset_quant,
-             const asset &price, const uint64_t &external_id,
+             const asset &price, const uint64_t &ext_id,
              const optional<dex::order_config_ex_t> &order_config_ex);
 
 
@@ -65,15 +65,15 @@ public:
      * @param sympair_id - symbol pair id
      * @param quantity - quantity
      * @param price - the price
-     * @param external_id - external id, always set by application
+     * @param ext_id - external id, always set by application
      */
     ACTION buy( const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
-                const uint64_t &external_id);
+                const uint64_t &ext_id);
 
     ACTION sell(const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
-                const uint64_t &external_id);
+                const uint64_t &ext_id);
 
     /**
      *  @param max_count the max count of match item
@@ -153,7 +153,7 @@ private:
             const name &order_side,
             const asset &limit_asset_quant,
             const optional<asset> &price,
-            const uint64_t &external_id,
+            const uint64_t &ext_id,
             const optional<dex::order_config_ex_t> &order_config_ex);
 
     void add_balance(const name &user, const name &bank, const asset &quantity, const name &type, const string& memo);

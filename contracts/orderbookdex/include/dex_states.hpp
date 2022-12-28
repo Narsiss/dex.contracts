@@ -235,7 +235,7 @@ namespace dex {
     //scope: order_side +  sympair_id
     struct DEX_TABLE order_t {
         uint64_t        order_id;           
-        uint64_t        external_id;        // external id
+        uint64_t        ext_id;        // external id
         name            owner;
         uint64_t        sympair_id;         // id of symbol_pair_table
         order_side_t    order_side;
@@ -254,7 +254,7 @@ namespace dex {
 
         uint64_t primary_key() const    { return order_id; }
         uint64_t by_owner()const        { return owner.value; }
-        uint64_t by_external_id()const  { return external_id; }
+        uint64_t by_ext_id()const  { return ext_id; }
         uint64_t get_price()const       { 
             return order_side == order_side::BUY ? (std::numeric_limits<uint64_t>::max() - price.amount): price.amount;
         }
@@ -268,7 +268,7 @@ namespace dex {
             auto last_updated_at = this->last_updated_at.elapsed.count(); // print the ms value
             PRINT_PROPERTIES(
                 PP(order_id),
-                PP(external_id),
+                PP(ext_id),
                 PP(owner),
                 PP0(sympair_id),
                 PP(order_side),

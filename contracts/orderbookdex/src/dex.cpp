@@ -260,7 +260,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         asset matched_coin_quant;
         asset matched_asset_quant;
-        matching_pair_it.calc_matched_amounts(matched_asset_quant, matched_coin_quant);
+        matching_pair_it.calc_matched_amounts(matched_asset_quant, matched_coin_quant );
         CHECKC(matched_asset_quant.amount > 0 || matched_coin_quant.amount > 0, err::PARAM_ERROR, "Invalid calc_matched_amounts!");
         if (matched_asset_quant.amount == 0 || matched_coin_quant.amount == 0) {
             TRACE_L("Dust calc_matched_amounts! ", PP0(matched_asset_quant), PP(matched_coin_quant));
@@ -408,10 +408,10 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
 void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
                             const name &order_side, const asset &limit_asset_quant,
                             const asset &price,
-                            const uint64_t &external_id,
+                            const uint64_t &ext_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
     // frozen_quant not in use
-    new_order(user, sympair_id, order_side, limit_asset_quant, price, external_id, order_config_ex);
+    new_order(user, sympair_id, order_side, limit_asset_quant, price, ext_id, order_config_ex);
 }
 
 /**
@@ -420,7 +420,7 @@ void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
 void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
                              const name &order_side, const asset &limit_asset_quant,
                              const optional<asset> &price,
-                             const uint64_t &external_id,
+                             const uint64_t &ext_id,
                              const optional<dex::order_config_ex_t> &order_config_ex) {
     CHECK_DEX_ENABLED()
     CHECKC(is_account(user), err::ACCOUNT_INVALID, "Account of user=" + user.to_string() + " does not existed");
@@ -478,7 +478,7 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
     auto order_id       = _global->new_queue_order_id();
     queue_tbl.emplace(get_self(), [&](auto &order) {
         order.order_id          = order_id;
-        order.external_id       = external_id;
+        order.ext_id       = ext_id;
         order.owner             = user;
         order.sympair_id        = sympair_id;
         order.order_side        = order_side;
@@ -569,15 +569,15 @@ void dex_contract::withdraw(const name &user, const name &bank, const asset& qua
 }
 
 void dex_contract::buy(const name &user, const uint64_t &sympair_id, const asset &quantity,
-                            const asset &price, const uint64_t &external_id) {
+                            const asset &price, const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
     new_order(user, sympair_id, order_side::BUY, quantity, price,
-              external_id, order_config_ex);
+              ext_id, order_config_ex);
 }
 
 void dex_contract::sell(const name &user, const uint64_t &sympair_id, const asset &quantity,
-                             const asset &price, const uint64_t &external_id) {
+                             const asset &price, const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
     new_order(user, sympair_id, order_side::SELL, quantity, price,
-              external_id, order_config_ex);
+              ext_id, order_config_ex);
 }
