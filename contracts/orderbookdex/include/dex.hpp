@@ -94,6 +94,8 @@ public:
     */
     ACTION adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts );
 
+    ACTION orderchange( const uint64_t queue_order_id, const uint64_t order_id);
+
     // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
     using neworder_action   = action_wrapper<"neworder"_n,  &dex_contract::neworder>;
     using buy_action        = action_wrapper<"buy"_n,       &dex_contract::buy>;
@@ -102,6 +104,7 @@ public:
     using cancel_action     = action_wrapper<"cancel"_n,    &dex_contract::cancel>;
 
     using deal_action       = action_wrapper<"adddexdeal"_n, &dex_contract::adddexdeal>;
+    using orderchange_action= action_wrapper<"orderchange"_n, &dex_contract::orderchange>;
 
 
 public:

@@ -7,9 +7,14 @@
 
 static constexpr eosio::name active_permission{"active"_n};
 
-#define ADD_ACTION( items, curr) \
+#define ADD_DEAL_ACTION( items, curr) \
      { dex_contract::deal_action act{ _self, { {_self, active_permission} } };\
 	        act.send( items, curr );}
+
+
+#define ORDERCHANGE_ACTION( queue_order_id, order_id) \
+     { dex_contract::orderchange_action act{ _self, { {_self, active_permission} } };\
+	        act.send( queue_order_id, queue_order_id );}
 
 using namespace eosio;
 using namespace std;
@@ -162,6 +167,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     TRACE_L ( "order_tbl, order_id:", order_id);
 
     // auto _index=     order_tbl.get_index<"orderprice"_n>();
+    ORDERCHANGE_ACTION(order_itr->order_id,order_id);
 
     order_tbl.emplace(_self, [&](auto &order_info) {
         order_info          = *order_itr;
@@ -347,7 +353,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
     TRACE_L("match finished: " , matched_count);
 
-    ADD_ACTION( items, time_point_sec(current_time_point()) );
+    ADD_DEAL_ACTION( items, time_point_sec(current_time_point()) );
 
     TRACE_L("save matching order begin");
     matching_pair_it.save_matching_order();
@@ -359,6 +365,11 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
 
 void dex_contract::adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts ) {
+    require_auth(get_self());
+    require_recipient(get_self());
+}
+
+void dex_contract::orderchange( const uint64_t queue_order_id, const uint64_t order_id) {
     require_auth(get_self());
     require_recipient(get_self());
 }
@@ -390,7 +401,7 @@ void dex_contract::_allot_fee(const name &from_user, const name& bank, const ass
     }
 
     if(dex_fee.amount > 0){
-        add_balance(_config.dex_fee_collector, bank, dex_fee, balance_type::ordermatched, "fee: " + to_string(order_id));
+        add_balance(_config.dex_fee_collector, bank, dex_fee, balance_type::orderfee, "fee: " + to_string(order_id));
     }
 }
 
@@ -532,12 +543,17 @@ void dex_contract::add_balance(const name &user, const name &bank, const asset &
 
         extended_asset reward_asset = extended_asset(quantity, bank);
         extended_symbol reward_symbol = reward_asset.get_extended_symbol();
-        if(it != rewards.end()){
+        if (it != rewards.end()) {
             rewards.modify(*it, _self, [&](auto &row) {
                 if(row.rewards.count(reward_symbol) == 0){
                     row.rewards[reward_symbol] = 0;
                 }
                 row.rewards[reward_symbol] += quantity.amount;
+            });
+        } else {
+            rewards.emplace(_self, [&]( auto& row ) {
+                row.owner                   = user;
+                row.rewards[reward_symbol]  = quantity.amount;
             });
         }
         break;
