@@ -57,8 +57,9 @@ ACTION dex_contract::init() {
 
 void dex_contract::setconfig(const dex::config &conf) {
     require_auth( get_self() );
-    CHECKC( is_account(conf.dex_admin),        err::ACCOUNT_INVALID,  "The dex_admin account does not exist");
-    CHECKC( is_account(conf.dex_fee_collector),err::ACCOUNT_INVALID,  "The dex_fee_collector account does not exist");
+    CHECKC( is_account(conf.dex_admin),         err::ACCOUNT_INVALID,  "The dex_admin account does not exist");
+    CHECKC( is_account(conf.dex_fee_collector), err::ACCOUNT_INVALID,  "The dex_fee_collector account does not exist");
+    CHECKC( conf.max_match_count >  0,          err::PARAM_ERROR,       "The max_match_count must be bigger than 0");
     validate_fee_ratio( conf.maker_fee_ratio,   "maker_fee_ratio");
     validate_fee_ratio( conf.taker_fee_ratio,   "taker_fee_ratio");
 
@@ -154,7 +155,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
             sym_pair_it->asset_symbol.get_contract();
 
     CHECKC( frozen_bank == get_first_receiver(),    err::PARAM_ERROR, "order asset must transfer from : " + frozen_bank.to_string() )
-    CHECKC( order_itr->frozen_quant == quant,       err::STATUS_ERROR, "require quantity is " + order_itr->frozen_quant.to_string() )
+    CHECKC( order_itr->total_frozen_quant == quant,       err::STATUS_ERROR, "require quantity is " + order_itr->total_frozen_quant.to_string() )
 
     auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_side );
     auto order_id = _global->new_order_id();
@@ -196,10 +197,10 @@ void dex_contract::cancel(const uint64_t& pair_id, const name& side, const uint6
     asset quantity;
     name bank;
     if (order.order_side == order_side::BUY) {
-        quantity = order.frozen_quant - order.matched_coin_quant;
+        quantity = order.total_frozen_quant - order.matched_coin_quant;
         bank = sym_pair_it->coin_symbol.get_contract();
     } else { // order.order_side == order_side::SELL
-        quantity = order.frozen_quant - order.matched_asset_quant;
+        quantity = order.total_frozen_quant - order.matched_asset_quant;
         bank = sym_pair_it->asset_symbol.get_contract();
     }
     CHECKC(quantity.amount >= 0, err::PARAM_ERROR, "Can not unfreeze the invalid quantity=" + quantity.to_string());
@@ -408,19 +409,19 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
 }
 
 void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
-                            const name &order_side, const asset &limit_asset_quant,
+                            const name &order_side, const asset &total_asset_quant,
                             const asset &price,
                             const uint64_t &ext_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
-    // frozen_quant not in use
-    new_order(user, sympair_id, order_side, limit_asset_quant, price, ext_id, order_config_ex);
+    // total_frozen_quant not in use
+    new_order(user, sympair_id, order_side, total_asset_quant, price, ext_id, order_config_ex);
 }
 
 /**
  * create order to queue
 */
 void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
-                             const name &order_side, const asset &limit_asset_quant,
+                             const name &order_side, const asset &total_asset_quant,
                              const optional<asset> &price,
                              const uint64_t &ext_id,
                              const optional<dex::order_config_ex_t> &order_config_ex) {
@@ -452,21 +453,21 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         CHECKC( price->amount > 0, err::PARAM_ERROR,  "The price must > 0 for limit order")
     }
 
-    asset frozen_quant;
+    asset total_frozen_quant;
     if (order_side == dex::order_side::BUY) {
-        CHECKC( limit_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
-            "The limit_symbol=" + symbol_to_string(limit_asset_quant.symbol) +
+        CHECKC( total_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
+            "The limit_symbol=" + symbol_to_string(total_asset_quant.symbol) +
             " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
             " for limit buy order");
         ASSERT(price.has_value());
-        frozen_quant = dex::calc_coin_quant(limit_asset_quant, *price, coin_symbol);
+        total_frozen_quant = dex::calc_coin_quant(total_asset_quant, *price, coin_symbol);
 
     } else { // order_side == order_side::SELL
-        CHECKC( limit_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
-                "The limit_symbol=" + symbol_to_string(limit_asset_quant.symbol) +
+        CHECKC( total_asset_quant.symbol == asset_symbol, err::PARAM_ERROR,
+                "The limit_symbol=" + symbol_to_string(total_asset_quant.symbol) +
                     " mismatch with asset_symbol=" + symbol_to_string(asset_symbol) +
                     " for sell order");
-        frozen_quant = limit_asset_quant;
+        total_frozen_quant = total_asset_quant;
     }  
 
     const auto &fee_symbol = (order_side == dex::order_side::BUY) ? asset_symbol : coin_symbol;
@@ -486,8 +487,8 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
         order.order_side        = order_side;
         order.order_type    = order_type::LIMIT;
         order.price             = price ? *price : asset(0, coin_symbol);
-        order.limit_asset_quant       = limit_asset_quant;
-        order.frozen_quant      = frozen_quant;
+        order.total_asset_quant       = total_asset_quant;
+        order.total_frozen_quant      = total_frozen_quant;
         order.taker_fee_ratio   = taker_fee_ratio;
         order.maker_fee_ratio   = maker_fee_ratio;
         order.matched_asset_quant    = asset(0, asset_symbol);

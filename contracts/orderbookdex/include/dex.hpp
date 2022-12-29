@@ -47,14 +47,14 @@ public:
      * @param user - user, owner of order
      * @param sympair_id - symbol pair id
      * @param order_side - order side, BUY | SELL
-     * @param limit_asset_quant - the limit quantity
+     * @param total_asset_quant - the limit quantity
      * @param price - the price
      * @param ext_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
      */
     ACTION neworder(const name &user, const uint64_t &sympair_id,
             const name &order_side,
-             const asset &limit_asset_quant,
+             const asset &total_asset_quant,
              const asset &price, const uint64_t &ext_id,
              const optional<dex::order_config_ex_t> &order_config_ex);
 
@@ -151,7 +151,7 @@ private:
 
     void new_order(const name &user, const uint64_t &sympair_id,
             const name &order_side,
-            const asset &limit_asset_quant,
+            const asset &total_asset_quant,
             const optional<asset> &price,
             const uint64_t &ext_id,
             const optional<dex::order_config_ex_t> &order_config_ex);

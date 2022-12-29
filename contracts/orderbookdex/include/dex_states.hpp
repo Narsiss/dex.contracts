@@ -241,8 +241,8 @@ namespace dex {
         order_side_t    order_side;
         order_type_t    order_type;
         asset           price;
-        asset           limit_asset_quant;
-        asset           frozen_quant;
+        asset           total_asset_quant;
+        asset           total_frozen_quant;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
         asset           matched_asset_quant; //!< total matched asset quantity
@@ -254,7 +254,7 @@ namespace dex {
 
         uint64_t primary_key() const    { return order_id; }
         uint64_t by_owner()const        { return owner.value; }
-        uint64_t by_ext_id()const  { return ext_id; }
+        uint64_t by_ext_id()const       { return ext_id; }
         uint64_t get_price()const       { 
             return order_side == order_side::BUY ? (std::numeric_limits<uint64_t>::max() - price.amount): price.amount;
         }
@@ -274,8 +274,8 @@ namespace dex {
                 PP(order_side),
                 PP(order_type),
                 PP(price),
-                PP(limit_asset_quant),
-                PP(frozen_quant),
+                PP(total_asset_quant),
+                PP(total_frozen_quant),
                 PP(taker_fee_ratio),
                 PP(maker_fee_ratio),
                 PP(matched_asset_quant),
