@@ -235,11 +235,11 @@ namespace dex {
     //scope: order_side +  sympair_id
     struct DEX_TABLE order_t {
         uint64_t        order_id;           
-        uint64_t        ext_id;        // external id
+        uint64_t        ext_id;             // external id
         name            owner;
         uint64_t        sympair_id;         // id of symbol_pair_table
-        order_side_t    order_side;
-        order_type_t    order_type;
+        order_side_t    order_side;         // buy | sell
+        order_type_t    order_type;         // limit price | market price
         asset           price;
         asset           total_asset_quant;
         asset           total_frozen_quant;
