@@ -600,3 +600,13 @@ void dex_contract::sell(const name &user, const uint64_t &sympair_id, const asse
     new_order(user, sympair_id, order_side::SELL, quantity, price,
               ext_id, order_config_ex);
 }
+
+void dex_contract::delqueueord(const name& user) {
+    require_auth(user);
+
+    auto queue_tbl = make_queue_table(get_self());
+    auto queue_owner_idx = queue_tbl.get_index<"orderowner"_n>();
+    auto order_itr = queue_owner_idx.find(user.value);
+    CHECKC( order_itr != queue_owner_idx.end(), err::PARAM_ERROR, "The order not in queue: user=" + user.to_string());
+    queue_owner_idx.erase(order_itr);
+}

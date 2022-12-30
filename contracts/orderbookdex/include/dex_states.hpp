@@ -241,12 +241,12 @@ namespace dex {
         order_side_t    order_side;         // buy | sell
         order_type_t    order_type;         // limit price | market price
         asset           price;
-        asset           total_asset_quant;
+        asset           total_asset_quant;  
         asset           total_frozen_quant;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
         asset           matched_asset_quant; //!< total matched asset quantity
-        asset           matched_coin_quant;      //!< total matched coin quantity
+        asset           matched_coin_quant;  //!< total matched coin quantity
         asset           matched_fee;        //!< total matched fees
         time_point      created_at;
         time_point      last_updated_at;

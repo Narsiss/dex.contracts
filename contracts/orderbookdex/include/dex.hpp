@@ -87,6 +87,12 @@ public:
     */
     ACTION cancel(const uint64_t& pair_id, const name& side, const uint64_t &order_id);
 
+
+    /**
+     * delete queue order
+    */
+    ACTION delqueueord(const name& user);
+
     /**
      * internal action for order matched.
      * deal items
