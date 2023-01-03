@@ -492,11 +492,11 @@ void dex_contract::new_order(const name &user, const uint64_t &sympair_id,
     auto order_id       = _global->new_queue_order_id();
     queue_tbl.emplace(get_self(), [&](auto &order) {
         order.order_id          = order_id;
-        order.ext_id       = ext_id;
+        order.ext_id            = ext_id;
         order.owner             = user;
         order.sympair_id        = sympair_id;
         order.order_side        = order_side;
-        order.order_type    = order_type::LIMIT;
+        order.order_type        = order_type::LIMIT;
         order.price             = price ? *price : asset(0, coin_symbol);
         order.total_asset_quant       = total_asset_quant;
         order.total_frozen_quant      = total_frozen_quant;
