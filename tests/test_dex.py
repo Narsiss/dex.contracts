@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
         
         
         dex_path = "/Users/joslin/code/workspace/opensource/dex.contracts"
-        # init.build(dex_path)
+        init.build(dex_path)
         dex = init.ORDERBOOKDEX()
         dex.init(dex)
         dex.get_config(dex)
@@ -88,15 +88,15 @@ class Test(unittest.TestCase):
         
   
         
-        dex.withdraw("dexadmin", "amax.mtoken", "0.00003000 METH", None, dexadmin)
-        dex.withdraw("dexadmin", "amax.mtoken", "0.008986 MUSDT", None, dexadmin)
-        dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
-        time.sleep(1)
-        dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
-        time.sleep(1)
+        # dex.withdraw("dexadmin", "amax.mtoken", "0.00003000 METH", None, dexadmin)
+        # dex.withdraw("dexadmin", "amax.mtoken", "0.008986 MUSDT", None, dexadmin)
+        # dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
+        # time.sleep(1)
+        # dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
+        # time.sleep(1)
         
-        dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
-        time.sleep(1)
+        # dex.withdraw("sellerp1", "amax.mtoken", "0.000001 MUSDT", None, sellerp1)
+        # time.sleep(1)
         
         COMMENT('''
             finished

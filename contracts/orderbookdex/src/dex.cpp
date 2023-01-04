@@ -287,8 +287,11 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         asset buy_fee = calc_match_fee(buy_order, taker_it.order_side(), buyer_recv_assets);
         buyer_recv_assets -= buy_fee;
-        add_balance(_config.dex_fee_collector, asset_bank, buy_fee,  balance_type::orderfee,
-                    " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
+        // add_balance(_config.dex_fee_collector, asset_bank, buy_fee,  balance_type::orderfee,
+        //             " order_id " + to_string(sell_order.order_id) + " deal with " + to_string(buy_order.order_id));
+
+        _allot_fee(buy_order.owner, asset_bank, buy_fee, sell_order.order_id);
+
 
         auto sell_fee = calc_match_fee(sell_order, taker_it.order_side(), seller_recv_coins);
         seller_recv_coins -= sell_fee;
