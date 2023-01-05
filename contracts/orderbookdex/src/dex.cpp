@@ -12,9 +12,9 @@ static constexpr eosio::name active_permission{"active"_n};
 	        act.send( items, curr );}
 
 
-#define ORDERCHANGE_ACTION( queue_order_id, order_id) \
+#define ORDERCHANGE_ACTION( queue_order_id, order) \
      { dex_contract::orderchange_action act{ _self, { {_self, active_permission} } };\
-	        act.send( queue_order_id, queue_order_id );}
+	        act.send( queue_order_id, order );}
 
 using namespace eosio;
 using namespace std;
@@ -167,13 +167,15 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     TRACE_L ( "order_tbl, order_id:", order_id);
 
     // auto _index=     order_tbl.get_index<"orderprice"_n>();
-    ORDERCHANGE_ACTION(order_itr->order_id,order_id);
 
     order_tbl.emplace(_self, [&](auto &order_info) {
         order_info          = *order_itr;
         order_info.order_id = order_id;
     });
     queue_owner_idx.erase(order_itr);
+
+    ORDERCHANGE_ACTION(order_itr->order_id, *order_itr);
+
     
     TRACE_L( "match_sympair begin  ", _config.max_match_count);
 
@@ -372,7 +374,7 @@ void dex_contract::adddexdeal(const std::list<dex::deal_item_t>& deal_items, con
     require_recipient(get_self());
 }
 
-void dex_contract::orderchange( const uint64_t queue_order_id, const uint64_t order_id) {
+void dex_contract::orderchange( const uint64_t queue_order_id, const dex::order_t& order) {
     require_auth(get_self());
     require_recipient(get_self());
 }
