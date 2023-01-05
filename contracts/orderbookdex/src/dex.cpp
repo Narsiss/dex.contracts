@@ -174,7 +174,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     });
     queue_owner_idx.erase(order_itr);
 
-    ORDERCHANGE_ACTION(order_itr->order_id, *order_itr);
+    ORDERCHANGE_ACTION(order_id, *order_itr);
 
     
     TRACE_L( "match_sympair begin  ", _config.max_match_count);
@@ -374,7 +374,7 @@ void dex_contract::adddexdeal(const std::list<dex::deal_item_t>& deal_items, con
     require_recipient(get_self());
 }
 
-void dex_contract::orderchange( const uint64_t queue_order_id, const dex::order_t& order) {
+void dex_contract::orderchange( const uint64_t order_id, const dex::order_t& order) {
     require_auth(get_self());
     require_recipient(get_self());
 }
