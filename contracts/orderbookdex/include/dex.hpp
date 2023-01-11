@@ -28,10 +28,13 @@ public:
     
     ACTION setconfig(const dex::config &conf);
 
-    ACTION setsympair(  const extended_symbol &asset_symbol,
-                        const extended_symbol &coin_symbol,
-                        const asset &min_asset_quant, const asset &min_coin_quant,
-                        bool enabled);
+    ACTION setsympair(  const extended_symbol&  asset_symbol,
+                        const extended_symbol&  coin_symbol,
+                        const asset&            min_asset_quant,
+                        const asset&            min_coin_quant,
+                        bool                    enabled,                              
+                        const uint64_t&         taker_fee_ratio,
+                        const uint64_t&         maker_fee_ratio);
 
     ACTION onoffsympair(const uint64_t& sympair_id, const bool& on_off);
 
@@ -67,14 +70,23 @@ public:
      * @param price - the price
      * @param ext_id - external id, always set by application
      */
-    ACTION buy( const name &user, const uint64_t &sympair_id,
+    ACTION limitbuy( const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
                 const uint64_t &ext_id);
 
-    ACTION sell(const name &user, const uint64_t &sympair_id,
+    
+
+    ACTION limitsell(const name &user, const uint64_t &sympair_id,
                 const asset &quantity, const asset &price,
                 const uint64_t &ext_id);
 
+    ACTION marketbuy(const name &user, const uint64_t &sympair_id,
+                const asset &quantity,
+                const uint64_t &ext_id);
+
+    ACTION marketsell(const name &user, const uint64_t &sympair_id,
+                const asset &quantity,
+                const uint64_t &ext_id);
     /**
      *  @param max_count the max count of match item
      *  @param sym_pairs the symol pairs to match. is empty, match all
@@ -85,7 +97,7 @@ public:
      * cancel order where order not finished
      * 
     */
-    ACTION cancel(const uint64_t& pair_id, const name& side, const uint64_t &order_id);
+    ACTION cancel(const uint64_t& pair_id, const name& type, const name& side, const uint64_t &order_id);
 
 
     /**
@@ -102,15 +114,22 @@ public:
 
     ACTION orderchange( const uint64_t order_id, const dex::order_t& order);
 
-    // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
-    using neworder_action   = action_wrapper<"neworder"_n,  &dex_contract::neworder>;
-    using buy_action        = action_wrapper<"buy"_n,       &dex_contract::buy>;
-    using sell_action       = action_wrapper<"sell"_n,      &dex_contract::sell>;
-    using match_action      = action_wrapper<"match"_n,     &dex_contract::match>;
-    using cancel_action     = action_wrapper<"cancel"_n,    &dex_contract::cancel>;
 
-    using deal_action       = action_wrapper<"adddexdeal"_n, &dex_contract::adddexdeal>;
-    using orderchange_action= action_wrapper<"orderchange"_n, &dex_contract::orderchange>;
+    ACTION addaplconf( const extended_symbol &asset_symbol, const asset apl_amount);
+
+    ACTION delaplconf( const extended_symbol &asset_symbol  );
+
+    // using withdraw_action   = action_wrapper<"withdraw"_n, &dex_contract::withdraw>;
+    using neworder_action           = action_wrapper<"neworder"_n,      &dex_contract::neworder>;
+    using limit_buy_action          = action_wrapper<"limitbuy"_n,      &dex_contract::limitbuy>;
+    using limit_sell_action         = action_wrapper<"limitsell"_n,     &dex_contract::limitsell>;
+    using market_buy_action         = action_wrapper<"marketbuy"_n,     &dex_contract::marketbuy>;
+    using market_sell_action        = action_wrapper<"marketsell"_n,    &dex_contract::marketsell>;
+    using match_action              = action_wrapper<"match"_n,         &dex_contract::match>;
+    using cancel_action             = action_wrapper<"cancel"_n,        &dex_contract::cancel>;
+
+    using deal_action               = action_wrapper<"adddexdeal"_n,    &dex_contract::adddexdeal>;
+    using orderchange_action        = action_wrapper<"orderchange"_n,   &dex_contract::orderchange>;
 
 
 public:
@@ -156,10 +175,15 @@ private:
 
     void match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair, uint32_t max_count,
                         uint32_t &matched_count, const string &memo);
+
+    void market_match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
+                                  uint32_t max_count, uint32_t &matched_count, const string &memo);
+
     void update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price);
 
     void new_order(const name &user, const uint64_t &sympair_id,
-            const name &order_side,
+            const name &order_side, 
+            const name &order_type,
             const asset &total_asset_quant,
             const optional<asset> &price,
             const uint64_t &ext_id,

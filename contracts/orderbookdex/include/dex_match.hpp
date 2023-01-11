@@ -79,8 +79,8 @@ namespace dex {
     class matching_order_iterator {
     public:
         using table_index_iterator_ptr = std::shared_ptr<table_index_iterator<table_t, index_t>>;
-        matching_order_iterator(table_index_iterator_ptr idx_itr, uint64_t sympair_id, order_side_t side)
-            : _idx_itr(idx_itr), _sym_pair_id(sympair_id), _order_side(side)
+        matching_order_iterator(table_index_iterator_ptr idx_itr, uint64_t sympair_id, order_type_t type, order_side_t side)
+            : _idx_itr(idx_itr), _sym_pair_id(sympair_id), _order_side(side),_order_type(type)
         {
             process_data();
         };
@@ -144,6 +144,15 @@ namespace dex {
             return ret;
         }
 
+        inline asset get_market_free_total_asset_quant(const asset& price, const symbol& asset_symbol) const {
+            TRACE_L("get_free_total_asset_quant");
+            ASSERT(_idx_itr->is_valid());
+            asset free_coin = _idx_itr->itr->total_frozen_quant - _idx_itr->itr->matched_coin_quant;
+            auto free_asset  = asset(calc_asset_amount(free_coin, price, asset_symbol), asset_symbol);
+            ASSERT(free_asset.amount >= 0);
+            return free_asset;
+        }
+
         inline asset get_refund_coins() const {
             TRACE_L("get_refund_coins");
 
@@ -153,6 +162,10 @@ namespace dex {
 
         inline const order_side_t &order_side() const {
             return _order_side;
+        }
+
+        inline const order_type_t &order_type() const {
+            return _order_type;
         }
 
         inline bool is_valid() const {
@@ -187,6 +200,7 @@ namespace dex {
         table_index_iterator_ptr    _idx_itr;
         uint64_t                    _sym_pair_id;
         order_side_t                _order_side;
+        order_side_t                _order_type;
 
         uint64_t                    _last_deal_id = 0;
         asset                       _matched_asset_quant;      //!< total matched asset amount
@@ -250,16 +264,21 @@ namespace dex {
             auto maker_free_assets      = _maker_itr->get_free_total_asset_quant();
 
             ASSERT(maker_free_assets.symbol == asset_symbol);
-            CHECK(maker_free_assets.amount > 0, "MUST: maker_free_assets > 0");
+            CHECK(maker_free_assets.amount > 0, "MUSDT: maker_free_assets > 0");
 
             asset taker_free_assets;
 
-            taker_free_assets = _taker_itr->get_free_total_asset_quant();
-            ASSERT(taker_free_assets.symbol == asset_symbol);
-            CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
-
-            matched_asset_quant = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
-            matched_coin_quant = calc_coin_quant(matched_asset_quant, matched_price, coin_symbol);
+            if (_taker_itr->order_side() == order_side::BUY && _taker_itr->order_type() == order_type::MARKET) {
+                taker_free_assets = _taker_itr->get_market_free_total_asset_quant(matched_price, asset_symbol);
+                matched_asset_quant = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
+                matched_coin_quant = calc_coin_quant(matched_asset_quant, matched_price, coin_symbol);
+            } else {
+                taker_free_assets = _taker_itr->get_free_total_asset_quant();
+                ASSERT(taker_free_assets.symbol == asset_symbol);
+                CHECK(taker_free_assets.amount > 0, "MUST: taker_free_assets > 0");
+                matched_asset_quant = (taker_free_assets < maker_free_assets) ? taker_free_assets : maker_free_assets;
+                matched_coin_quant = calc_coin_quant(matched_asset_quant, matched_price, coin_symbol);
+            }
         }
 
     private:
@@ -283,7 +302,7 @@ namespace dex {
                                          _buy_itr->stored_order().price,", sell:", _buy_itr->stored_order().order_id, "  ", _sell_itr->stored_order().price);
                 if ( _buy_itr->is_valid() && _sell_itr->is_valid() &&
                      _buy_itr->stored_order().price >= _sell_itr->stored_order().price ) {
-                    if ( _buy_itr->stored_order().order_id > _sell_itr->stored_order().order_id ) {
+                    if ( _buy_itr->stored_order().order_id > _sell_itr->stored_order().order_id  || _buy_itr->stored_order().order_type == order_type::MARKET ) {
                         _taker_itr = _buy_itr;
                         _maker_itr = _sell_itr;
                     } else {
@@ -313,14 +332,15 @@ namespace dex {
 
     inline auto make_order_iterator(const name contract,
                                     const dex::symbol_pair_t &sym_pair, 
+                                    const order_type_t &type,
                                     const order_side_t &side) {
 
-        auto tbl = std::make_shared<order_tbl>(make_order_table( contract, sym_pair.sympair_id, side ));
+        auto tbl = std::make_shared<order_tbl>(make_order_table( contract, sym_pair.sympair_id, type, side ));
 
         auto idx_obj = tbl->get_index<"orderprice"_n>();
         auto idx  = std::make_shared<decltype(idx_obj)>(idx_obj);
         auto itr = make_table_index_iterator(tbl, idx, idx->begin());
-        return std::make_shared<matching_order_iterator<order_tbl, decltype(idx_obj)>>(itr, sym_pair.sympair_id, side);
+        return std::make_shared<matching_order_iterator<order_tbl, decltype(idx_obj)>>(itr, sym_pair.sympair_id, type, side);
     }
 
 }// namespace dex

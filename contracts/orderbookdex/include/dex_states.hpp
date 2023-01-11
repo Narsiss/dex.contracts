@@ -112,6 +112,8 @@ namespace dex {
         set<extended_symbol> support_quote_symbols;
         uint64_t    parent_reward_ratio;    //parent reward ratio of total fee
         uint64_t    grand_reward_ratio;     //grand reward ratio of total fee
+        uint64_t    price_offset_ratio;     //defalut value: 500 (%5)
+
 
         uint64_t    apl_farm_id;
         map<symbol_code, uint32_t> farm_scales;
@@ -291,16 +293,17 @@ namespace dex {
     using order_price_idx = indexed_by<"orderprice"_n, const_mem_fun<order_t, uint64_t, &order_t::get_price> >;
     using order_owner_idx = indexed_by<"orderowner"_n, const_mem_fun<order_t, uint64_t, &order_t::by_owner> >;
 
-    typedef eosio::multi_index<"order"_n, order_t, order_price_idx> order_tbl;
-    typedef eosio::multi_index<"queue"_n, order_t, order_owner_idx> queue_tbl;
+    typedef eosio::multi_index<"order"_n,       order_t, order_price_idx> order_tbl;
+    typedef eosio::multi_index<"queue"_n,       order_t, order_owner_idx> queue_tbl;
+    typedef eosio::multi_index<"marketorder"_n, order_t, order_price_idx> market_order_tbl;
 
-    inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id, const order_side_t& side ) { \
-                    return order_tbl(self, pair_id * 10000 + uint64_t(order_side::index(side))); \
-                }
+
+    inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id,const order_type_t& type,  const order_side_t& side  ) { \
+        return order_tbl(self, pair_id * 10000 + uint64_t(order_type::index(type)) + uint64_t(order_side::index(side))); \
+    }
     
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
  
-
     struct DEX_TABLE deal_item_t {
         uint64_t    id;
         uint64_t    sympair_id;
