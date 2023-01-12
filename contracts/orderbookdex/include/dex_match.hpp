@@ -79,8 +79,8 @@ namespace dex {
     class matching_order_iterator {
     public:
         using table_index_iterator_ptr = std::shared_ptr<table_index_iterator<table_t, index_t>>;
-        matching_order_iterator(table_index_iterator_ptr idx_itr, uint64_t sympair_id, order_type_t type, order_side_t side)
-            : _idx_itr(idx_itr), _sym_pair_id(sympair_id), _order_side(side),_order_type(type)
+        matching_order_iterator(table_index_iterator_ptr idx_itr, name sympair_code, order_type_t type, order_side_t side)
+            : _idx_itr(idx_itr), _sym_pair_code(sympair_code), _order_side(side),_order_type(type)
         {
             process_data();
         };
@@ -114,23 +114,27 @@ namespace dex {
                     const asset &new_matched_coin_quant,
                     const asset &new_matched_fee) {
 
-            _last_deal_id   = deal_id;
-            _matched_asset_quant += new_matched_asset_quant;
-            _matched_coin_quant  += new_matched_coin_quant;
-            _matched_fee    += new_matched_fee;
-            const auto &order = *_idx_itr->itr;
+            _last_deal_id           = deal_id;
+            _matched_asset_quant    += new_matched_asset_quant;
+            _matched_coin_quant     += new_matched_coin_quant;
+            _matched_fee            += new_matched_fee;
+            const auto &order       = *_idx_itr->itr;
 
-            CHECK(_matched_asset_quant <= order.total_asset_quant,
+            if (order.order_side == order_side::BUY && order.order_type == order_type::MARKET) {
+                _complete = _matched_coin_quant == order.total_frozen_quant;
+            } else {
+                CHECK(_matched_asset_quant <= order.total_asset_quant,
                 "The matched assets=" + _matched_asset_quant.to_string() +
                 " is overflow with total_asset_quant=" + order.total_asset_quant.to_string());
-            _complete = _matched_asset_quant == order.total_asset_quant;
+                _complete = _matched_asset_quant == order.total_asset_quant;
 
-            if (order.order_side == order_side::BUY) {
-                CHECK(_matched_coin_quant <= order.total_frozen_quant,
-                        "The _matched_coin_quant =" + _matched_coin_quant.to_string() +
-                        " is overflow with total_frozen_quant=" + order.total_frozen_quant.to_string() + " for buy order");
-                if (_complete) {
-                    _refund_coins = order.total_frozen_quant - _matched_coin_quant;
+                if (order.order_side == order_side::BUY) {
+                    CHECK(_matched_coin_quant <= order.total_frozen_quant,
+                            "The _matched_coin_quant =" + _matched_coin_quant.to_string() +
+                            " is overflow with total_frozen_quant=" + order.total_frozen_quant.to_string() + " for buy order");
+                    if (_complete) {
+                        _refund_coins = order.total_frozen_quant - _matched_coin_quant;
+                    }
                 }
             }
         }
@@ -182,7 +186,7 @@ namespace dex {
             TRACE_L("process_data");
 
             if (!_idx_itr->is_valid()) {
-                TRACE("matching order itr end! sympair_id=", _sym_pair_id, ", side=", _order_side, "\n");
+                TRACE("matching order itr end! sympair_code=", _sym_pair_code.to_string(), ", side=", _order_side, "\n");
                 return;
             }
 
@@ -198,7 +202,7 @@ namespace dex {
         }
 
         table_index_iterator_ptr    _idx_itr;
-        uint64_t                    _sym_pair_id;
+        name                        _sym_pair_code;
         order_side_t                _order_side;
         order_side_t                _order_type;
 
@@ -340,7 +344,7 @@ namespace dex {
         auto idx_obj = tbl->get_index<"orderprice"_n>();
         auto idx  = std::make_shared<decltype(idx_obj)>(idx_obj);
         auto itr = make_table_index_iterator(tbl, idx, idx->begin());
-        return std::make_shared<matching_order_iterator<order_tbl, decltype(idx_obj)>>(itr, sym_pair.sympair_id, type, side);
+        return std::make_shared<matching_order_iterator<order_tbl, decltype(idx_obj)>>(itr, sym_pair.sympair_code, type, side);
     }
 
 }// namespace dex

@@ -28,17 +28,24 @@ public:
     
     ACTION setconfig(const dex::config &conf);
 
-    ACTION setsympair(  const extended_symbol&  asset_symbol,
-                        const extended_symbol&  coin_symbol,
-                        const asset&            min_asset_quant,
-                        const asset&            min_coin_quant,
-                        bool                    enabled,                              
-                        const uint64_t&         taker_fee_ratio,
-                        const uint64_t&         maker_fee_ratio);
+                                
+    ACTION setsympair(  const name&                 sympair_code, 
+                        const extended_symbol&      asset_symbol,
+                        const extended_symbol&      coin_symbol,
+                        const asset&                min_asset_quant,
+                        const asset&                min_coin_quant,
+                        bool                        enabled,
+                        const uint64_t&             taker_fee_ratio,
+                        const uint64_t&             maker_fee_ratio,
+                        const uint64_t              asset_precision,          //asset precision
+                        const uint64_t              coin_precision,         //coin precision
+                        const uint64_t              price_precision,        //price precision
+                        const uint64_t              deal_precision         //成交精度
+                        );
 
-    ACTION onoffsympair(const uint64_t& sympair_id, const bool& on_off);
+    ACTION onoffsympair(const name& sympair_code, const bool& on_off);
 
-    ACTION delsympair(const uint64_t& sympair_id);
+    ACTION delsympair(const name& sympair_code);
 
     [[eosio::on_notify("*::transfer")]] 
     void ontransfer(const name& from, const name& to, const asset& quant, const string& memo);
@@ -48,14 +55,14 @@ public:
     /**
      * create a new order
      * @param user - user, owner of order
-     * @param sympair_id - symbol pair id
+     * @param sympair_code - symbol pair id
      * @param order_side - order side, BUY | SELL
      * @param total_asset_quant - the limit quantity
      * @param price - the price
      * @param ext_id - external id, always set by application
      * @param order_config_ex - optional extended config, must authenticate by admin if set
      */
-    ACTION neworder(const name &user, const uint64_t &sympair_id,
+    ACTION neworder(const name &user, const name &sympair_code,
             const name &order_side,
              const asset &total_asset_quant,
              const asset &price, const uint64_t &ext_id,
@@ -65,39 +72,39 @@ public:
     /**
      * create buy new order
      * @param user - user, owner of order
-     * @param sympair_id - symbol pair id
+     * @param sympair_code - symbol pair id
      * @param quantity - quantity
      * @param price - the price
      * @param ext_id - external id, always set by application
      */
-    ACTION limitbuy( const name &user, const uint64_t &sympair_id,
+    ACTION limitbuy( const name &user, const name &sympair_code,
                 const asset &quantity, const asset &price,
                 const uint64_t &ext_id);
 
     
 
-    ACTION limitsell(const name &user, const uint64_t &sympair_id,
+    ACTION limitsell(const name &user, const name &sympair_code,
                 const asset &quantity, const asset &price,
                 const uint64_t &ext_id);
 
-    ACTION marketbuy(const name &user, const uint64_t &sympair_id,
+    ACTION marketbuy(const name &user, const name &sympair_code,
                 const asset &quantity,
                 const uint64_t &ext_id);
 
-    ACTION marketsell(const name &user, const uint64_t &sympair_id,
+    ACTION marketsell(const name &user, const name &sympair_code,
                 const asset &quantity,
                 const uint64_t &ext_id);
     /**
      *  @param max_count the max count of match item
      *  @param sym_pairs the symol pairs to match. is empty, match all
      */
-    ACTION match(const name &matcher, const uint64_t& pair_id, uint32_t max_count, const string &memo);
+    ACTION match(const name &matcher, const name& pair_code, uint32_t max_count, const string &memo);
 
     /**
      * cancel order where order not finished
      * 
     */
-    ACTION cancel(const uint64_t& pair_id, const name& type, const name& side, const uint64_t &order_id);
+    ACTION cancel(const name& pair_code, const name& type, const name& side, const uint64_t &order_id);
 
 
     /**
@@ -179,9 +186,9 @@ private:
     void market_match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
                                   uint32_t max_count, uint32_t &matched_count, const string &memo);
 
-    void update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price);
+    void update_latest_deal_price(const name& sympair_code, const asset& latest_deal_price);
 
-    void new_order(const name &user, const uint64_t &sympair_id,
+    void new_order(const name &user, const name &sympair_code,
             const name &order_side, 
             const name &order_type,
             const asset &total_asset_quant,

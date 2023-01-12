@@ -71,13 +71,19 @@ void dex_contract::setconfig(const dex::config &conf) {
     _conf_tbl.set(conf, get_self());
 }
 
-void dex_contract::setsympair(const extended_symbol&    asset_symbol,
-                              const extended_symbol&    coin_symbol,
-                              const asset&              min_asset_quant,
-                              const asset&              min_coin_quant,
-                              bool                      enabled,
-                              const uint64_t&           taker_fee_ratio,
-                              const uint64_t&           maker_fee_ratio
+void dex_contract::setsympair(
+                                const name&                 sympair_code, 
+                                const extended_symbol&      asset_symbol,
+                                const extended_symbol&      coin_symbol,
+                                const asset&                min_asset_quant,
+                                const asset&                min_coin_quant,
+                                bool                        enabled,
+                                const uint64_t&             taker_fee_ratio,
+                                const uint64_t&             maker_fee_ratio,
+                                const uint64_t              asset_precision,          //asset precision
+                                const uint64_t              coin_precision,         //coin precision
+                                const uint64_t              price_precision,        //price precision
+                                const uint64_t              deal_precision         //成交精度
                               ) {
     require_auth( _config.dex_admin );
     const auto &asset_sym = asset_symbol.get_symbol();
@@ -96,11 +102,13 @@ void dex_contract::setsympair(const extended_symbol&    asset_symbol,
 
     auto it = index.find( make_symbols_idx(asset_symbol, coin_symbol));
     if (it == index.end()) {
-        // new sym pair
         auto sympair_id = _global->new_sympair_id();
-        CHECKC( sympair_tbl.find(sympair_id) == sympair_tbl.end(), err::RECORD_NOT_FOUND, "The symbol pair id exist");
+
+        // new sym pair
+        CHECKC( sympair_tbl.find(sympair_code.value) == sympair_tbl.end(), err::RECORD_NOT_FOUND, "The symbol pair id exist");
         sympair_tbl.emplace(get_self(), [&](auto &sym_pair) {
-            sym_pair.sympair_id          = sympair_id;
+            sym_pair.sympair_id           = sympair_id;
+            sym_pair.sympair_code         = sympair_code;
             sym_pair.asset_symbol         = asset_symbol;
             sym_pair.coin_symbol          = coin_symbol;
             sym_pair.min_asset_quant      = min_asset_quant;
@@ -118,23 +126,23 @@ void dex_contract::setsympair(const extended_symbol&    asset_symbol,
     }
 }
 
-void dex_contract::onoffsympair(const uint64_t& sympair_id, const bool& on_off) {
+void dex_contract::onoffsympair(const name& sympair_code, const bool& on_off) {
     require_auth( _config.dex_admin );
 
     auto sympair_tbl = make_sympair_table(_self);
-    auto it = sympair_tbl.find(sympair_id);
-    CHECKC( it != sympair_tbl.end(),            err::RECORD_NOT_FOUND, "sympair not found: " + to_string(sympair_id) )
+    auto it = sympair_tbl.find(sympair_code.value);
+    CHECKC( it != sympair_tbl.end(),            err::RECORD_NOT_FOUND, "sympair not found: " + sympair_code.to_string())
     sympair_tbl.modify(*it, same_payer, [&](auto &row) {
         row.enabled                 = on_off;
     });
 }
 
-void dex_contract::delsympair(const uint64_t& sympair_id) {
+void dex_contract::delsympair(const name& sympair_code) {
     require_auth( _config.dex_admin );
 
     auto sympair_tbl = make_sympair_table(_self);
-    auto it = sympair_tbl.find(sympair_id);
-    CHECKC( it != sympair_tbl.end(),            err::RECORD_NOT_FOUND, "sympair not found: " + to_string(sympair_id) )
+    auto it = sympair_tbl.find(sympair_code.value);
+    CHECKC( it != sympair_tbl.end(),            err::RECORD_NOT_FOUND, "sympair not found: " + sympair_code.to_string() )
     sympair_tbl.erase(it);
 }
 
@@ -151,10 +159,10 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
     CHECKC( order_itr != queue_owner_idx.end(), err::PARAM_ERROR, "The order not in queue: from=" + from.to_string());
 
     auto sympair_tbl = make_sympair_table(get_self());
-    auto sympair_id = order_itr->sympair_id;
-    auto sym_pair_it = sympair_tbl.find(sympair_id);
-    CHECKC( sym_pair_it != sympair_tbl.end(),   err::RECORD_NOT_FOUND, "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
-    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair '" + std::to_string(sympair_id) + " is disabled")
+    auto sympair_code = order_itr->sympair_code;
+    auto sym_pair_it = sympair_tbl.find(sympair_code.value);
+    CHECKC( sym_pair_it != sympair_tbl.end(),   err::RECORD_NOT_FOUND, "The symbol pair id '" + sympair_code.to_string() + "' does not exist")
+    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair '" + sympair_code.to_string() + " is disabled")
 
     const auto &asset_symbol = sym_pair_it->asset_symbol.get_symbol();
     const auto &coin_symbol = sym_pair_it->coin_symbol.get_symbol();
@@ -171,7 +179,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
 
     if( order_itr->order_side == dex::order_side::SELL || order_itr->order_type == dex::order_type::LIMIT ) {
 
-        auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, dex::order_type::LIMIT, order_itr->order_side );
+        auto order_tbl = make_order_table( get_self(), sym_pair_it->sympair_id, dex::order_type::LIMIT, order_itr->order_side );
         auto order_id = _global->new_order_id();
         TRACE_L ( "order_tbl, order_id:", order_id);
 
@@ -185,7 +193,7 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
         match_sympair(get_self(), *sym_pair_it, _config.max_match_count, matched_count, "oid:" + std::to_string(order_id));
 
     } else {
-        auto order_tbl = make_order_table( get_self(), order_itr->sympair_id, order_itr->order_type, order_itr->order_side );
+        auto order_tbl = make_order_table( get_self(), sym_pair_it->sympair_id, order_itr->order_type, order_itr->order_side );
         auto order_id = _global->new_order_id();
         TRACE_L ( "order_tbl, order_id:", order_id);
         order_tbl.emplace(_self, [&](auto &order_info) {
@@ -200,21 +208,22 @@ void dex_contract::ontransfer(const name& from, const name& to, const asset& qua
 
 }
 
-void dex_contract::cancel(const uint64_t& pair_id, const name& type, const name& side, const uint64_t &order_id) {
+void dex_contract::cancel(const name& pair_code, const name& type, const name& side, const uint64_t &order_id) {
     CHECK_DEX_ENABLED()
-    auto order_tbl = make_order_table(get_self(), pair_id, type, side);
+
+    auto sympair_tbl = make_sympair_table(get_self());
+    auto sym_pair_it = sympair_tbl.find(pair_code.value);
+    CHECKC( sym_pair_it != sympair_tbl.end(), err::RECORD_NOT_FOUND,
+        "The symbol pair code '" + pair_code.to_string() + "' does not exist");
+    CHECKC( sym_pair_it->enabled,  err::STATUS_ERROR,    "The symbol pair '" + pair_code.to_string() + " is disabled")
+
+    auto order_tbl = make_order_table(get_self(), sym_pair_it->sympair_id, type, side);
     auto it = order_tbl.find(order_id);
     CHECKC(it != order_tbl.end(), err::RECORD_NOT_FOUND, "The order does not exist or has been matched");
     auto order = *it;
     // TODO: support the owner auth to cancel order?
     require_auth(order.owner);
-
-    auto sympair_tbl = make_sympair_table(get_self());
-    auto sym_pair_it = sympair_tbl.find(order.sympair_id);
-    CHECKC( sym_pair_it != sympair_tbl.end(), err::RECORD_NOT_FOUND,
-        "The symbol pair id '" + std::to_string(order.sympair_id) + "' does not exist");
-    CHECKC( sym_pair_it->enabled,  err::STATUS_ERROR,    "The symbol pair '" + std::to_string(order.sympair_id) + " is disabled")
-
+    
     asset quantity;
     name bank;
     if (order.order_side == order_side::BUY) {
@@ -242,7 +251,7 @@ dex::config dex_contract::get_default_config() {
     };
 }
 
-void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32_t max_count, const string &memo) {
+void dex_contract::match(const name &matcher, const name& sympair_code, uint32_t max_count, const string &memo) {
     CHECK_DEX_ENABLED()
 
     CHECKC(is_account(matcher),                 err::ACCOUNT_INVALID, "The matcher account does not exist");
@@ -250,9 +259,9 @@ void dex_contract::match(const name &matcher, const uint64_t& sympair_id, uint32
 
     auto sympair_tbl = dex::make_sympair_table(get_self());
    
-    auto sym_pair_it = sympair_tbl.find(sympair_id);
-    CHECKC(sym_pair_it != sympair_tbl.end(),    err::PARAM_ERROR,  "The symbol pair=" + std::to_string(sympair_id) + " does not exist");
-    CHECKC(sym_pair_it->enabled,                err::STATUS_ERROR, "The indicated sym_pair=" + std::to_string(sympair_id) + " is disabled");
+    auto sym_pair_it = sympair_tbl.find(sympair_code.value);
+    CHECKC(sym_pair_it != sympair_tbl.end(),    err::PARAM_ERROR,  "The symbol pair=" + sympair_code.to_string() + " does not exist");
+    CHECKC(sym_pair_it->enabled,                err::STATUS_ERROR, "The indicated sym_pair=" + sympair_code.to_string() + " is disabled");
 
     uint32_t matched_count = 0;
     match_sympair(matcher, *sym_pair_it, max_count, matched_count, memo);
@@ -342,7 +351,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
 
         deal_item_t deal_item;
         deal_item.id            = deal_id;
-        deal_item.sympair_id    = sym_pair.sympair_id;        
+        deal_item.sympair_code    = sym_pair.sympair_code;        
         deal_item.buy_order_id  = buy_order.order_id;
         deal_item.sell_order_id = sell_order.order_id;
         deal_item.buyer         = buy_order.owner;
@@ -378,7 +387,7 @@ void dex_contract::match_sympair(const name &matcher, const dex::symbol_pair_t &
     TRACE_L("save matching order end");
 
     if (latest_deal_price.amount > 0)
-        update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
+        update_latest_deal_price(sym_pair.sympair_code, latest_deal_price);
 }
 
 void dex_contract::market_match_sympair(const name &matcher, const dex::symbol_pair_t &sym_pair,
@@ -464,7 +473,7 @@ void dex_contract::market_match_sympair(const name &matcher, const dex::symbol_p
 
         deal_item_t deal_item;
         deal_item.id            = deal_id;
-        deal_item.sympair_id    = sym_pair.sympair_id;        
+        deal_item.sympair_code    = sym_pair.sympair_code;        
         deal_item.buy_order_id  = buy_order.order_id;
         deal_item.sell_order_id = sell_order.order_id;
         deal_item.buyer         = buy_order.owner;
@@ -500,7 +509,7 @@ void dex_contract::market_match_sympair(const name &matcher, const dex::symbol_p
     TRACE_L("save matching order end");
 
     if (latest_deal_price.amount > 0)
-        update_latest_deal_price(sym_pair.sympair_id, latest_deal_price);
+        update_latest_deal_price(sym_pair.sympair_code, latest_deal_price);
 }
 
 void dex_contract::adddexdeal(const std::list<dex::deal_item_t>& deal_items, const time_point_sec& curr_ts ) {
@@ -534,12 +543,12 @@ void dex_contract::_allot_fee(const name &from_user, const name& bank, const ass
     }
 }
 
-void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const asset& latest_deal_price) {
+void dex_contract::update_latest_deal_price(const name& sympair_code, const asset& latest_deal_price) {
 
     TRACE_L("update_latest_deal_price begin");
 
     auto sympair_tbl = make_sympair_table(_self);
-    auto it = sympair_tbl.find( sympair_id );
+    auto it = sympair_tbl.find( sympair_code.value );
     CHECKC( it != sympair_tbl.end(), err::PARAM_ERROR, "Err: sympair not found" )
 
     sympair_tbl.modify(*it, same_payer, [&](auto &row) {
@@ -548,20 +557,20 @@ void dex_contract::update_latest_deal_price(const uint64_t& sympair_id, const as
     TRACE_L("update_latest_deal_price end");
 }
 
-void dex_contract::neworder(const name &user, const uint64_t &sympair_id,
+void dex_contract::neworder(const name &user, const name &sympair_code,
                             const name &order_side, const asset &total_asset_quant,
                             const asset &price,
                             const uint64_t &ext_id,
                             const optional<dex::order_config_ex_t> &order_config_ex) {
     // total_frozen_quant not in use
-    new_order(user, sympair_id, order_side, order_type::LIMIT, total_asset_quant, price, ext_id, order_config_ex);
+    new_order(user, sympair_code, order_side, order_type::LIMIT, total_asset_quant, price, ext_id, order_config_ex);
 }
 
 /**
  * create order to queue
 */
 void dex_contract::new_order(const name             &user,
-                            const uint64_t          &sympair_id,
+                            const name              &sympair_code,
                             const name              &order_side, 
                             const name              &order_type, 
                             const asset             &total_asset_quant,
@@ -574,9 +583,9 @@ void dex_contract::new_order(const name             &user,
     if (_config.admin_sign_required || order_config_ex) { require_auth(_config.dex_admin); }
 
     auto sympair_tbl = make_sympair_table(get_self());
-    auto sym_pair_it = sympair_tbl.find(sympair_id);
-    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
-    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + std::to_string(sympair_id) + "] is disabled")
+    auto sym_pair_it = sympair_tbl.find(sympair_code.value);
+    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + sympair_code.to_string() + "' does not exist")
+    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + sympair_code.to_string() + "] is disabled")
 
     const auto &asset_symbol    = sym_pair_it->asset_symbol.get_symbol();
     const auto &coin_symbol     = sym_pair_it->coin_symbol.get_symbol();
@@ -626,7 +635,7 @@ void dex_contract::new_order(const name             &user,
         order.order_id                  = order_id;
         order.ext_id                    = ext_id;
         order.owner                     = user;
-        order.sympair_id                = sympair_id;
+        order.sympair_code                = sympair_code;
         order.order_side                = order_side;
         order.order_type                = order_type;
         order.price                     = price ? *price : asset(0, coin_symbol);
@@ -719,50 +728,50 @@ void dex_contract::withdraw(const name &user, const name &bank, const asset& qua
     TRANSFER( bank, user, quant, "reward withdraw" )
 }
 
-void dex_contract::limitbuy(const name &user, const uint64_t &sympair_id, const asset &quantity,
+void dex_contract::limitbuy(const name &user, const name &sympair_code, const asset &quantity,
                             const asset &price, const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
-    new_order(user, sympair_id, order_side::BUY, order_type::LIMIT, quantity, price,
+    new_order(user, sympair_code, order_side::BUY, order_type::LIMIT, quantity, price,
               ext_id, order_config_ex);
 }
 
-void dex_contract::limitsell(const name &user, const uint64_t &sympair_id, const asset &quantity,
+void dex_contract::limitsell(const name &user, const name &sympair_code, const asset &quantity,
                              const asset &price, const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
-    new_order(user, sympair_id, order_side::SELL, order_type::LIMIT, quantity, price,
+    new_order(user, sympair_code, order_side::SELL, order_type::LIMIT, quantity, price,
               ext_id, order_config_ex);
 }
 
-void dex_contract::marketbuy(const name &user, const uint64_t &sympair_id,
+void dex_contract::marketbuy(const name &user, const name &sympair_code,
                 const asset &quantity,
                 const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
     auto sympair_tbl = make_sympair_table(get_self());
-    auto sym_pair_it = sympair_tbl.find(sympair_id);
-    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
-    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + std::to_string(sympair_id) + "] is disabled")
+    auto sym_pair_it = sympair_tbl.find(sympair_code.value);
+    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + sympair_code.to_string() + "' does not exist")
+    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + sympair_code.to_string() + "] is disabled")
 
     auto deal_price = sym_pair_it->latest_deal_price;
     auto market_price = deal_price * (RATIO_PRECISION + _config.price_offset_ratio) / RATIO_PRECISION;
     
-    new_order(user, sympair_id, order_side::BUY, order_type::MARKET, quantity, market_price,
+    new_order(user, sympair_code, order_side::BUY, order_type::MARKET, quantity, market_price,
               ext_id, order_config_ex);
 }
 
 
-void dex_contract::marketsell(const name &user, const uint64_t &sympair_id,
+void dex_contract::marketsell(const name &user, const name &sympair_code,
                 const asset &quantity,
                 const uint64_t &ext_id) {
     optional<dex::order_config_ex_t> order_config_ex;
     auto sympair_tbl = make_sympair_table(get_self());
-    auto sym_pair_it = sympair_tbl.find(sympair_id);
-    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + std::to_string(sympair_id) + "' does not exist")
-    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + std::to_string(sympair_id) + "] is disabled")
+    auto sym_pair_it = sympair_tbl.find(sympair_code.value);
+    CHECKC( sym_pair_it != sympair_tbl.end(),   err::PARAM_ERROR, "The symbol pair id '" + sympair_code.to_string() + "' does not exist")
+    CHECKC( sym_pair_it->enabled,               err::STATUS_ERROR, "The symbol pair [" + sympair_code.to_string() + "] is disabled")
 
     auto deal_price = sym_pair_it->latest_deal_price;
     auto market_price = deal_price * (RATIO_PRECISION - _config.price_offset_ratio) / RATIO_PRECISION;
     
-    new_order(user, sympair_id, order_side::SELL, order_type::MARKET, quantity, market_price,
+    new_order(user, sympair_code, order_side::SELL, order_type::MARKET, quantity, market_price,
               ext_id, order_config_ex);
 }
 

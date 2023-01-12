@@ -165,13 +165,13 @@ namespace dex {
             return new_auto_inc_id(queue_order_id);
         }
 
+        inline uint64_t new_deal_item_id() {
+            return new_auto_inc_id(deal_item_id);
+        }
         inline uint64_t new_sympair_id() {
             return new_auto_inc_id(sympair_id);
         }
 
-        inline uint64_t new_deal_item_id() {
-            return new_auto_inc_id(deal_item_id);
-        }
 
         inline void change() {
             changed = true;
@@ -199,11 +199,10 @@ namespace dex {
     }
 
     struct DEX_TABLE symbol_pair_t {
-        uint64_t        sympair_id; // PK: auto-increment
+        name            sympair_code; // PK
+        uint64_t        sympair_id; // PK
         extended_symbol asset_symbol;
         extended_symbol coin_symbol;
-        asset           min_asset_quant;
-        asset           min_coin_quant;
         asset           latest_deal_price;
         int64_t         taker_fee_ratio;
         int64_t         maker_fee_ratio;
@@ -212,8 +211,14 @@ namespace dex {
         int64_t         farm_ratio;
         int64_t         parent_fee_ratio;
         int64_t         grand_fee_ratio;
-
-        uint64_t primary_key() const { return sympair_id; }
+        asset           min_asset_quant;        //最小资产
+        asset           min_coin_quant;         //最小金额
+        uint64_t        asset_precision;        //asset precision
+        uint64_t        coin_precision;         //coin precision
+        uint64_t        price_precision;        //price precision
+        uint64_t        deal_precision;         //成交精度
+ 
+        uint64_t primary_key() const { return sympair_code.value; }
         inline uint256_t get_symbols_idx() const { return make_symbols_idx(asset_symbol, coin_symbol); }
 
     };
@@ -234,12 +239,12 @@ namespace dex {
     uint128_t make_uint128(uint64_t high_val, uint64_t low_val) {
         return uint128_t(high_val) << 64 | uint128_t(low_val);
     }
-    //scope: order_side +  sympair_id
+    //scope: order_side +  sympair_code
     struct DEX_TABLE order_t {
         uint64_t        order_id;           
         uint64_t        ext_id;             // external id
         name            owner;
-        uint64_t        sympair_id;         // id of symbol_pair_table
+        name            sympair_code;         // id of symbol_pair_table
         order_side_t    order_side;         // buy | sell
         order_type_t    order_type;         // limit price | market price
         asset           price;
@@ -272,7 +277,7 @@ namespace dex {
                 PP(order_id),
                 PP(ext_id),
                 PP(owner),
-                PP0(sympair_id),
+                PP0(sympair_code),
                 PP(order_side),
                 PP(order_type),
                 PP(price),
@@ -299,14 +304,14 @@ namespace dex {
 
 
     inline static order_tbl make_order_table(const name &self, const uint64_t& pair_id,const order_type_t& type,  const order_side_t& side  ) { \
-        return order_tbl(self, pair_id * 10000 + uint64_t(order_type::index(type)) + uint64_t(order_side::index(side))); \
+        return order_tbl(self, pair_id * 100000 + uint64_t(order_type::index(type)) * 10 + uint64_t(order_side::index(side))); \
     }
     
     inline static queue_tbl make_queue_table(const name &self) { return queue_tbl(self, self.value/*scope*/); }
  
     struct DEX_TABLE deal_item_t {
         uint64_t    id;
-        uint64_t    sympair_id;
+        name        sympair_code;
         uint64_t    buy_order_id;
         uint64_t    sell_order_id;
         name        buyer;
@@ -325,7 +330,7 @@ namespace dex {
             auto deal_time = this->deal_time.elapsed.count(); // print the ms value
             PRINT_PROPERTIES(
                 PP0(id),
-                PP(sympair_id),
+                PP(sympair_code),
                 PP(buy_order_id),
                 PP(sell_order_id),
                 PP(buyer),
